@@ -9,7 +9,7 @@
     "generate:sounds": "node scripts/generate-clean-sounds.mjs",
     "dev": "pnpm run build && electron .",
     "package:mac": "pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir && bash scripts/sign-macos.sh release/mac-arm64/Jarvis.app",
-    "test": "node --experimental-strip-types --no-warnings scripts/spoken-hide-test.mjs && node --experimental-strip-types --no-warnings scripts/spoken-map-test.mjs && node --experimental-strip-types --no-warnings scripts/spoken-conflicts-test.mjs"
+    "test": "node --experimental-strip-types --no-warnings scripts/spoken-hide-test.mjs && node --experimental-strip-types --no-warnings scripts/spoken-conflicts-test.mjs"
   },
   "build": {
     "appId": "io.github.jarvis.desktopassistant",

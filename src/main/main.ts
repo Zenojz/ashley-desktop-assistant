@@ -14,7 +14,7 @@ import {
   systemPreferences,
   Tray
 } from 'electron';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
@@ -24,8 +24,8 @@ import { loadEnvironment } from './environment';
 import os from 'node:os';
 import { describeWeather, type WeatherCoordinates } from './weather';
 
-// Coarse device location, ported from the HUD project. macOS attributes the
-// permission to the helper .app bundle, which shows its own purpose string.
+// Coarse device location for weather. macOS attributes permission to the
+// helper .app bundle, which shows its own purpose string.
 //
 // Cached for ten minutes: the helper takes a few seconds to run and a laptop
 // does not move between two weather questions. A failed or denied lookup is
@@ -348,8 +348,8 @@ async function updateAvatarVisibility() {
     showAvatar();
     return;
   }
-  // Hidden on purpose. The visual window must stay absent even when the HUD
-  // desktop or a clear macOS desktop is visible; the independent voice core
+  // Hidden on purpose. The visual window must stay absent even when a clear
+  // macOS desktop is visible; the independent voice core
   // remains alive and can still hear a later “出来” request.
   if (avatarVisibilityMode === 'forced-hidden') return;
   windowMonitorInFlight = true;
@@ -386,109 +386,6 @@ function stopWindowMonitor() {
   clearDesktopChecks = 0;
 }
 
-/**
- * The whole of this application's authority over the map: one URL.
- *
- * Jarvis and the HUD are separate applications on purpose — neither may
- * destabilise the other — so nothing crosses between them but this. The map
- * itself decides whether the request is one it will honour, and refuses
- * anything it does not recognise.
- */
-const HOLO_MAP_SCHEME = 'jarvis-hud';
-
-/**
- * The last map URL sent, and when.
- *
- * Map movements are *relative* — zoom in, pan left — so running one twice does
- * not repeat an outcome, it doubles a movement. That makes the duplicate
- * visible in a way it never was for opening an app or playing a song: a spoken
- * "再放大" that reaches both the model and the local fallback drops two levels
- * instead of one.
- *
- * The window is shorter than any human repeat and longer than the race it
- * guards against, so saying the same thing twice on purpose still works.
- */
-let lastHoloMapUrl = '';
-let lastHoloMapAt = 0;
-const HOLO_MAP_DEDUPE_MS = 900;
-
-async function openHoloMapUrl(path: string): Promise<void> {
-  const now = Date.now();
-  if (path === lastHoloMapUrl && now - lastHoloMapAt < HOLO_MAP_DEDUPE_MS) {
-    console.log(`[Jarvis] 同一条地图指令在 ${now - lastHoloMapAt} ms 内重复，已忽略：${path}`);
-    return;
-  }
-  lastHoloMapUrl = path;
-  lastHoloMapAt = now;
-  const url = `${HOLO_MAP_SCHEME}://${path}`;
-  // LaunchServices can open the HUD yet lose the first custom-URL Apple Event
-  // during a cold start.  Passing the same tightly parsed URL to the fixed HUD
-  // executable is deterministic: a cold HUD reads it from process.argv, while
-  // an already-running HUD receives it through Electron's second-instance
-  // argv.  The URL scheme remains as a fallback for development installs.
-  const installedHud = '/Applications/HUD.app/Contents/MacOS/HUD';
-  if (existsSync(installedHud)) {
-    const child = spawn(installedHud, [url], {
-      detached: true,
-      stdio: 'ignore'
-    });
-    child.unref();
-    return;
-  }
-  await shell.openExternal(url);
-}
-
-const MAP_ACTIONS = new Set(['pan', 'zoom', 'turn', 'tilt', 'level', 'freeze', 'resume', 'reset']);
-const MAP_DIRECTIONS = new Set(['up', 'down', 'left', 'right', 'in', 'out']);
-const MAP_LEVELS = new Set(['globe', 'continent', 'province', 'city', 'district', 'building']);
-/** The three sizes, in the units the map's own vocabulary uses. */
-const MAP_PAN_AMOUNT = { small: 0.25, normal: 0.55, large: 1.1 } as const;
-const MAP_TURN_DEGREES = { small: 15, normal: 45, large: 90 } as const;
-const MAP_TILT_DEGREES = { small: 5, normal: 12, large: 25 } as const;
-
-function readMapSize(raw: unknown): 'small' | 'normal' | 'large' {
-  return raw === 'small' || raw === 'large' ? raw : 'normal';
-}
-
-/**
- * Turns what the model (or the local fallback) decided into the map's query.
- *
- * Returns null rather than a default when the action is not one of the eight,
- * because a camera that moves in an unasked-for way is worse than one that does
- * not move at all.
- */
-function buildHoloMapQuery(args: Record<string, unknown>): string | null {
-  const action = typeof args.action === 'string' ? args.action : '';
-  if (!MAP_ACTIONS.has(action)) return null;
-  const direction = typeof args.direction === 'string' && MAP_DIRECTIONS.has(args.direction)
-    ? args.direction
-    : null;
-  const size = readMapSize(args.amount);
-
-  switch (action) {
-    case 'pan':
-      if (!direction || !['up', 'down', 'left', 'right'].includes(direction)) return null;
-      return `do=pan&dir=${direction}&amount=${MAP_PAN_AMOUNT[size]}`;
-    case 'zoom': {
-      if (direction !== 'in' && direction !== 'out') return null;
-      const steps = Math.max(1, Math.min(5, Math.round(Number(args.steps) || 1)));
-      return `do=zoom&dir=${direction}&steps=${steps}`;
-    }
-    case 'turn':
-      if (direction !== 'left' && direction !== 'right') return null;
-      return `do=turn&dir=${direction}&degrees=${MAP_TURN_DEGREES[size]}`;
-    case 'tilt':
-      if (direction !== 'up' && direction !== 'down') return null;
-      return `do=tilt&dir=${direction}&degrees=${MAP_TILT_DEGREES[size]}`;
-    case 'level': {
-      const level = typeof args.level === 'string' ? args.level : '';
-      return MAP_LEVELS.has(level) ? `do=level&level=${level}` : null;
-    }
-    default:
-      return `do=${action}`;
-  }
-}
-
 function showJarvisByVoiceRequest() {
   avatarVisibilityMode = 'forced-visible';
   clearDesktopChecks = 0;
@@ -499,8 +396,8 @@ function showJarvisByVoiceRequest() {
  * "隐藏" — out of the way, but still here and still listening.
  *
  * Deliberately not the same thing as ending the conversation. The visual
- * BrowserWindow is genuinely hidden so it also disappears over HUD desktop
- * layers and a completely clear desktop. The independent voice window, live
+ * BrowserWindow is genuinely hidden so it also disappears over a completely
+ * clear desktop. The independent voice window, live
  * provider session and microphone are untouched.
  *
  * The counterpart of `show_jarvis`, which is what brings it back to the front.
@@ -994,29 +891,6 @@ async function executeComputerAction(name: string, rawArgs: unknown) {
       showJarvisByVoiceRequest();
       return 'Ashley 已现身。';
     }
-    case 'open_holo_map': {
-      await openHoloMapUrl('map?do=open');
-      return '全息地图已打开。';
-    }
-    case 'close_holo_map': {
-      await openHoloMapUrl('map?do=close');
-      return '全息地图已关闭。';
-    }
-    case 'focus_holo_map': {
-      const place = requireActionText(args, 'place', 60);
-      await openHoloMapUrl(`focus?place=${encodeURIComponent(place)}`);
-      // Deliberately not "已定位到上海". This side cannot know whether the name
-      // resolved — the map looks it up against a real geocoding service and
-      // shows "未找到" when it cannot. Claiming success here would be inventing
-      // an outcome, which is the one thing that layer exists not to do.
-      return `已把定位请求发给全息地图：${place}。`;
-    }
-    case 'control_holo_map': {
-      const query = buildHoloMapQuery(args);
-      if (!query) throw new Error('没听清要地图做什么。');
-      await openHoloMapUrl(`map?${query}`);
-      return '已发给全息地图。';
-    }
     case 'send_jarvis_back': {
       sendJarvisToBackByVoiceRequest();
       return '已隐藏，随时听候。';
@@ -1206,11 +1080,7 @@ const doubaoInstructions = [
   '【立即调用工具的说法】',
   '用户说「退下」「退下吧」「拜拜」「再见」「没事了」「好了」「先这样」「不用了」「结束」「休眠」：调用 end_conversation。不要先说再见，调用就是告别。',
   '用户单独说「Ashley」「艾希莉」「艾什莉」「阿什利」「Jarvis」「贾维斯」，或说「出来」「现身」「回来」：调用 show_jarvis。',
-  '用户说「打开全息地图」「开启全息地图」「显示全息地图」：立即调用 open_holo_map；这是打开 HUD桌面全息地图的独立入口，不能只口头答应。',
-  '用户说「关闭全息地图」「关掉全息地图」「收起全息地图」：立即调用 close_holo_map；只关闭 HUD桌面的地图层，绝不能关闭 Jarvis。',
   '用户说「隐藏」「藏起来」「让开」「别挡着」「遮住了」「退到后面」：调用 send_jarvis_back。这会真正隐藏头盔视觉窗口，但语音和对话继续在线；不是休眠、不是结束对话、更不是退出程序。',
-  '用户说「帮我转到某地」「看一下某地」「定位到某地」：调用 focus_holo_map，place 填地名原文。',
-  '用户让地图动——放大、缩小、拉近、拉远、往左、往右、往上、往下、转视角、抬头、低头、停一下、别动、继续、回正、看全球、看城市——一律调用 control_holo_map。不要求固定说法，意思对就调用；这是手势不灵时的备用通道，不要口头答应而不调用。',
   '用户说「完全退出」「关闭程序」「退出程序」：调用 quit_jarvis。',
   '用户问时间、几点、今天几号、星期几：调用 get_current_time。',
   '用户问天气、气温、冷不冷、要不要带伞：调用 get_weather，然后原样念出它返回的那句话。',
@@ -1419,67 +1289,6 @@ function getRealtimeSessionConfig() {
         description:
           '在已经唤醒的会话中，用户单独说“Ashley”“艾希莉”“艾什莉”“阿什利”“Jarvis”“贾维斯”，或明确要求你现身、出来、显示头盔时，必须立即调用。Ashley 是当前形象的名字；此指令不是休眠指令，不能只用语音口头回应。',
         parameters: { type: 'object', properties: {}, additionalProperties: false }
-      },
-      {
-        type: 'function',
-        name: 'open_holo_map',
-        description:
-          '打开 HUD桌面的全息地图。用户在唤醒 Jarvis 后说“打开全息地图”“开启全息地图”“显示全息地图”时必须立即调用；这是独立入口，不能只口头答应，也不要改用定位地点来代替。',
-        parameters: { type: 'object', properties: {}, additionalProperties: false }
-      },
-      {
-        type: 'function',
-        name: 'close_holo_map',
-        description:
-          '关闭 HUD桌面的全息地图图层，但保持 HUD桌面和 Jarvis 继续运行。用户说“关闭全息地图”“关掉全息地图”“收起全息地图”时必须立即调用；绝不能把它当成退出 Jarvis。',
-        parameters: { type: 'object', properties: {}, additionalProperties: false }
-      },
-      {
-        type: 'function',
-        name: 'focus_holo_map',
-        description:
-          '把全息地图转到某个真实地点。用户说“帮我转到上海”“看一下拉萨”“定位到北京”这类要求时调用，place 填地名原文。地名由地图自己去真实地理编码服务查询，查不到时画面会显示未找到；不要自己猜坐标，也不要声称已经定位成功。',
-        parameters: {
-          type: 'object',
-          properties: { place: { type: 'string', description: '地名原文，例如上海、拉萨、东京。' } },
-          required: ['place'],
-          additionalProperties: false
-        }
-      },
-      {
-        type: 'function',
-        name: 'control_holo_map',
-        description:
-          '操作全息地图的镜头，是手势之外的备用通道。用户说放大、缩小、拉近、拉远、往左、往右、往上、往下、转视角、抬头、低头、停一下、别动、继续、回正、看全球、看城市等等时调用。不必要求用户用固定说法，只要意思是让地图动就调用；把意思归到 action 和 direction 上即可。地图没打开时这个指令不会有任何效果。',
-        parameters: {
-          type: 'object',
-          properties: {
-            action: {
-              type: 'string',
-              enum: ['pan', 'zoom', 'turn', 'tilt', 'level', 'freeze', 'resume', 'reset'],
-              description:
-                'pan 平移画面；zoom 放大缩小；turn 转视角方位；tilt 抬头低头；level 直接跳到某个尺度；freeze 停住；resume 恢复；reset 回正。'
-            },
-            direction: {
-              type: 'string',
-              enum: ['up', 'down', 'left', 'right', 'in', 'out'],
-              description: 'pan 用上下左右；zoom 用 in 放大、out 缩小；turn 用左右；tilt 用上下。'
-            },
-            amount: {
-              type: 'string',
-              enum: ['small', 'normal', 'large'],
-              description: '用户说“一点点”“稍微”用 small，说“很多”“一大截”用 large，没说就用 normal。'
-            },
-            steps: { type: 'number', description: 'zoom 时跨几级，用户没说就是 1。' },
-            level: {
-              type: 'string',
-              enum: ['globe', 'continent', 'province', 'city', 'district', 'building'],
-              description: 'action 为 level 时填：全球、洲、省、城市、街区、建筑。'
-            }
-          },
-          required: ['action'],
-          additionalProperties: false
-        }
       },
       {
         type: 'function',

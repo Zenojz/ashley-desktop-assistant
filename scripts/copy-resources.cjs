@@ -16,8 +16,8 @@ if (process.platform === 'darwin') {
     path.join(nativeDestination, 'window-status')
   ]);
 
-  // Coarse location helper, ported from the HUD project. macOS grants location
-  // permission per app bundle, so this must be a real .app with its own
+  // macOS grants location permission per app bundle, so the coarse location
+  // helper must be a real .app with its own
   // Info.plist rather than a bare binary.
   const locationAppRoot = path.join(nativeDestination, 'JarvisLocation.app', 'Contents');
   const locationExecutableRoot = path.join(locationAppRoot, 'MacOS');

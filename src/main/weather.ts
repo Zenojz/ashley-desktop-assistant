@@ -6,8 +6,7 @@
 // rather than structured data, because the caller is a voice model that will
 // read the string aloud verbatim.
 //
-// Uses the same QWeather credentials as the HUD project, so a key that already
-// works there can be copied across unchanged.
+// Credentials are read from the controlled environment configuration.
 
 type QWeatherConfiguration = { host: string; apiKey: string };
 

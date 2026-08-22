@@ -1,7 +1,4 @@
 import { inferSpokenHideRequest } from './spoken-hide';
-import {
-  inferSpokenMapCloseRequest, inferSpokenMapIntent, inferSpokenMapOpenRequest
-} from './spoken-map';
 import WakeWordEngine from 'openwakeword-wasm-browser';
 import { voiceConfig } from './voice-config';
 import {
@@ -786,74 +783,7 @@ function inferSpokenGuanlanCloseRequest(rawText: string): Record<string, unknown
     : null;
 }
 
-/**
- * Turns a heard map instruction into the tool's own arguments.
- *
- * The parsing lives in its own module and is tested by running it, because the
- * requirement here is not "recognise these phrases" but "understand roughly
- * what was meant" — and the only way to know whether that is true is to feed it
- * the dozen ways a person actually says the same thing.
- */
-function inferSpokenMapCommand(rawText: string): Record<string, unknown> | null {
-  const intent = inferSpokenMapIntent(rawText);
-  if (!intent) return null;
-  switch (intent.kind) {
-    case 'pan':
-      return { action: 'pan', direction: intent.direction, amount: intent.amount };
-    case 'zoom':
-      return { action: 'zoom', direction: intent.direction, steps: intent.steps };
-    case 'turn':
-      return { action: 'turn', direction: intent.direction, amount: intent.amount };
-    case 'tilt':
-      return { action: 'tilt', direction: intent.direction, amount: intent.amount };
-    case 'level':
-      return { action: 'level', level: intent.level };
-    default:
-      return { action: intent.kind };
-  }
-}
-
 const spokenCommandFallbacks: SpokenCommandFallback[] = [
-  {
-    // Opening the map is its own command, not a camera movement. It has to work
-    // while the layer is closed, and cannot depend on the provider deciding to
-    // call a tool after it has already promised verbally to do so.
-    tool: 'open_holo_map',
-    delayMs: 1_450,
-    matches: (rawText) => inferSpokenMapOpenRequest(rawText),
-    arguments: () => ({})
-  },
-  {
-    // The full object name is mandatory, so "关闭全息地图" can never fall
-    // through to Jarvis's own quit/farewell paths.
-    tool: 'close_holo_map',
-    delayMs: 1_450,
-    matches: (rawText) => inferSpokenMapCloseRequest(rawText),
-    arguments: () => ({})
-  },
-  {
-    // The map's backup channel, and the reason it exists is that the primary
-    // one — hands — is not always reliable. A backup that only works when the
-    // model happens to co-operate is not a backup, so this is deterministic.
-    //
-    // Cheap to get wrong in the safe direction: a control command does nothing
-    // at all unless the map is already open, so a stray match on a closed map
-    // moves nothing.
-    tool: 'control_holo_map',
-    // 1450, not 900, and the number is not a guess: the music fallback carries a
-    // comment recording that real Doubao tool calls land 1.003–1.045 s after
-    // final ASR, and that a 1.000 s fallback therefore raced them and ran the
-    // same request twice. This one was set to 900 and did exactly that — a
-    // spoken "再放大" zoomed two levels.
-    //
-    // The generic cancel in executeFunctionCall cannot help at 900 ms, because
-    // by the time the model's call arrives the fallback has already fired and
-    // cleared its own timer. Leaving room is the fix; the de-duplication on the
-    // other side is the backstop.
-    delayMs: 1_450,
-    matches: (rawText) => inferSpokenMapCommand(rawText) !== null,
-    arguments: (rawText) => inferSpokenMapCommand(rawText) ?? {}
-  },
   {
     // Placed first on purpose. "隐藏" has no obvious tool for the model to
     // reach for, and the nearest thing in the whole list is end_conversation —
@@ -861,7 +791,7 @@ const spokenCommandFallbacks: SpokenCommandFallback[] = [
     // ending in the middle of the work the user was asking to see.
     //
     // Only the visual window is hidden: the microphone, provider session and
-    // conversation all carry on, including over the HUD desktop layer.
+    // conversation all carry on.
     tool: 'send_jarvis_back',
     delayMs: 900,
     matches: (rawText) => inferSpokenHideRequest(rawText),

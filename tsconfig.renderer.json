@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "dist/renderer",
+    "rootDir": "src/renderer",
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src/renderer/**/*.ts"],
+  "exclude": ["src/renderer/auth.ts", "src/renderer/identity-api.d.ts"]
+}

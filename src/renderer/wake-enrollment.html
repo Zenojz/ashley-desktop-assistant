@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ashley 专属唤醒录入</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at 50% 20%, #122534, #05090d 68%); color: #e8f8ff; }
+    main { width: min(460px, calc(100vw - 48px)); text-align: center; }
+    .orb { width: 92px; height: 92px; margin: 0 auto 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #baf6ff, #1ba7c7 24%, #052a3c 63%, #02080d); box-shadow: 0 0 42px #24cceb88, inset 0 0 24px #8cf4ff55; }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    p { color: #9db8c4; line-height: 1.55; }
+    #status { min-height: 50px; color: #dffbff; }
+    #count { margin: 18px 0; font-variant-numeric: tabular-nums; font-size: 34px; color: #77eaff; }
+    .actions { display: flex; justify-content: center; gap: 12px; }
+    button { border: 1px solid #2c7186; border-radius: 10px; padding: 11px 20px; color: #eaffff; background: #0b3544; font-size: 15px; }
+    button.primary { background: #0d7593; border-color: #2bcbea; min-width: 150px; }
+    button:disabled { opacity: .55; }
+    small { display: block; margin-top: 20px; color: #718d98; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="orb"></div>
+    <h1>录入你的 “Ashley”</h1>
+    <p>每次点击后，用你平时召唤它的自然语气说一遍。可以改变距离、轻重和语速，不需要刻意模仿标准口音。</p>
+    <div id="count">0 / 12</div>
+    <p id="status">正在连接现有唤醒麦克风…</p>
+    <div class="actions">
+      <button id="record" class="primary" disabled>录入下一次</button>
+      <button id="close">关闭</button>
+    </div>
+    <small>只保存本地声学特征，不保存或上传录音。完成 12 次后会直接启用 Ashley 独立召唤。</small>
+  </main>
+  <script type="module" src="./wake-enrollment.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+allowBuilds:
+  electron: true
+  # This package only creates Windows installers and is not used for the macOS app.
+  electron-winstaller: false
+  esbuild: true
+  protobufjs: true

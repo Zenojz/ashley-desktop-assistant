@@ -1,0 +1,54 @@
+{
+  "name": "jarvis-desktop-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node scripts/copy-resources.cjs && tsc && tsc -p tsconfig.renderer.json --noEmit && node scripts/bundle-renderer.cjs",
+    "build:helmet:opensource": "node scripts/build-opensource-helmet.mjs",
+    "generate:sounds": "node scripts/generate-clean-sounds.mjs",
+    "dev": "pnpm run build && electron .",
+    "package:mac": "pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir && bash scripts/sign-macos.sh release/mac-arm64/Jarvis.app",
+    "test": "node --experimental-strip-types --no-warnings scripts/spoken-hide-test.mjs && node --experimental-strip-types --no-warnings scripts/spoken-map-test.mjs && node --experimental-strip-types --no-warnings scripts/spoken-conflicts-test.mjs"
+  },
+  "build": {
+    "appId": "io.github.jarvis.desktopassistant",
+    "productName": "Jarvis",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "dist/native/**",
+      "dist/assets/sounds/**"
+    ],
+    "mac": {
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Jarvis 需要使用麦克风来识别唤醒词。",
+        "NSAppleEventsUsageDescription": "Jarvis 需要控制 macOS 桌面来执行你明确要求的桌面切换。"
+      }
+    }
+  },
+  "dependencies": {
+    "openwakeword-wasm-browser": "^0.1.1",
+    "three": "^0.185.1",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "4.4.2",
+    "@gltf-transform/extensions": "4.4.2",
+    "@gltf-transform/functions": "4.4.2",
+    "@types/node": "^22.15.3",
+    "@types/three": "^0.185.4",
+    "@types/ws": "^8.18.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "meshoptimizer": "1.1.1",
+    "sharp": "0.35.3",
+    "typescript": "^5.8.3"
+  }
+}

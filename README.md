@@ -1,9 +1,13 @@
-# Jarvis / Ashley
+# Ashley
 
-Jarvis is a macOS desktop voice assistant. Ashley, its transparent Three.js
-avatar, floats above the desktop and supports voice interaction, assembly and
-fracture effects, rotation, gestures, weather lookup, and experimental music
-control.
+Ashley is a macOS desktop voice assistant. Its transparent Three.js avatar
+floats above the desktop and supports voice interaction, assembly and fracture
+effects, rotation, gestures, weather lookup, and experimental music control.
+
+The bundled wake-word model is a community model from openWakeWord whose
+trigger phrase is "Hey Jarvis"; the phrase belongs to that upstream model and
+is unrelated to this project's name. After enrolling your own voice, Ashley
+responds to "Ashley" through a locally trained personal wake model.
 
 The repository ships with an optimized, openly licensed sci-fi helmet and
 programmatically generated sound effects. It does not include API credentials,
@@ -65,7 +69,7 @@ signed build.
 Open the tray menu and choose **录入 Ashley 唤醒声纹…** to record the local
 wake profile. The profile is stored outside the repository by Electron and is
 not uploaded as a project asset. Saying “Ashley” (including the supported
-Chinese transliterations) shows the avatar; legacy Jarvis aliases remain for
+Chinese transliterations) shows the avatar; legacy aliases remain for
 compatibility.
 
 ## Generated sound effects
@@ -107,7 +111,7 @@ Cloud Music can move controls and temporarily break these actions.
 - License: [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
 - Source: [Sketchfab](https://sketchfab.com/)
 
-Changes for Jarvis: geometry reduced from 240,984 to approximately 40,000
+Changes for Ashley: geometry reduced from 240,984 to approximately 40,000
 triangles; texture-free source materials replaced with programmatic PBR
 materials and cyan emissive eye shading.
 

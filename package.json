@@ -1,5 +1,5 @@
 {
-  "name": "jarvis-desktop-assistant",
+  "name": "ashley-desktop-assistant",
   "version": "0.1.0",
   "private": true,
   "main": "dist/main/main.js",
@@ -12,8 +12,8 @@
     "test": "node --experimental-strip-types --no-warnings scripts/spoken-hide-test.mjs && node --experimental-strip-types --no-warnings scripts/spoken-conflicts-test.mjs"
   },
   "build": {
-    "appId": "io.github.jarvis.desktopassistant",
-    "productName": "Jarvis",
+    "appId": "io.github.ashley.desktopassistant",
+    "productName": "Ashley",
     "directories": {
       "output": "release"
     },

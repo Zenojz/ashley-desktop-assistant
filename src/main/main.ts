@@ -132,7 +132,7 @@ function writeConsole(line: string) {
 }
 
 function log(message: string) {
-  const line = `[${new Date().toISOString()}] [Jarvis] ${message}`;
+  const line = `[${new Date().toISOString()}] [Ashley] ${message}`;
   writeConsole(line);
   const logPath = process.env.JARVIS_DEBUG_LOG || path.join(app.getPath('userData'), 'runtime.log');
   void fs.appendFile(logPath, `${line}\n`).catch(() => undefined);
@@ -150,7 +150,7 @@ async function persistAudioDiagnostic(summary: string) {
       'utf8'
     );
   } catch (error) {
-    console.warn('[Jarvis] Unable to persist audio diagnostics.', error);
+    console.warn('[Ashley] Unable to persist audio diagnostics.', error);
   }
 }
 
@@ -164,7 +164,7 @@ async function persistVoiceEvent(message: string) {
       'utf8'
     );
   } catch (error) {
-    console.warn('[Jarvis] Unable to persist voice events.', error);
+    console.warn('[Ashley] Unable to persist voice events.', error);
   }
 }
 
@@ -367,7 +367,7 @@ async function updateAvatarVisibility() {
   } catch (error) {
     if (!windowMonitorWarningLogged) {
       windowMonitorWarningLogged = true;
-      console.error('[Jarvis] Unable to read visible application windows.', error);
+      console.error('[Ashley] Unable to read visible application windows.', error);
     }
   } finally {
     windowMonitorInFlight = false;
@@ -460,7 +460,7 @@ function presentAssemblyWindow() {
 function playAssemblySound() {
   const soundPath = resolveRuntimeResource('assets', 'sounds', 'assembly.wav');
   execFile('afplay', [soundPath], (error) => {
-    if (error) console.error(`[${new Date().toISOString()}] [Jarvis] Unable to play assembly sound.`, error);
+    if (error) console.error(`[${new Date().toISOString()}] [Ashley] Unable to play assembly sound.`, error);
   });
 }
 
@@ -636,7 +636,7 @@ async function playMusic(
   if (process.platform !== 'darwin') throw new Error('音乐播放控制目前仅支持 macOS。');
   if (!systemPreferences.isTrustedAccessibilityClient(true)) {
     await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
-    throw new Error('需要允许 Jarvis 控制电脑。我已打开“辅助功能”设置；启用 Jarvis 后，请再说一次播放歌曲。');
+    throw new Error('需要允许 Ashley 控制电脑。我已打开“辅助功能”设置；启用 Ashley 后，请再说一次播放歌曲。');
   }
 
   const details = musicApplicationDetails[applicationName];
@@ -726,7 +726,7 @@ async function controlMusic(applicationName: MusicApplication, action: MusicCont
   if (process.platform !== 'darwin') throw new Error('音乐播放控制目前仅支持 macOS。');
   if (!systemPreferences.isTrustedAccessibilityClient(true)) {
     await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
-    throw new Error('需要允许 Jarvis 控制电脑。我已打开“辅助功能”设置；启用 Jarvis 后，请再试一次。');
+    throw new Error('需要允许 Ashley 控制电脑。我已打开“辅助功能”设置；启用 Ashley 后，请再试一次。');
   }
 
   const details = musicApplicationDetails[applicationName];
@@ -780,7 +780,7 @@ async function switchMacDesktop(destination: 'first' | 'second' | 'next' | 'prev
   // yet been trusted. We intentionally check before sending any key event.
   if (!systemPreferences.isTrustedAccessibilityClient(true)) {
     await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
-    throw new Error('需要允许 Jarvis 控制电脑。我已打开“辅助功能”设置；启用 Jarvis 后，请再说一次切换桌面。');
+    throw new Error('需要允许 Ashley 控制电脑。我已打开“辅助功能”设置；启用 Ashley 后，请再说一次切换桌面。');
   }
 
   // "First" and "second" are absolute, so they cannot be expressed as one
@@ -805,7 +805,7 @@ async function switchMacDesktop(destination: 'first' | 'second' | 'next' | 'prev
   await new Promise<void>((resolve, reject) => {
     execFile('/usr/bin/osascript', ['-e', script], { timeout: 5_000 }, (error) => {
       if (error) {
-        reject(new Error('Jarvis 还需要获得“自动化”权限来控制 System Events。请在系统设置的“隐私与安全性 → 自动化”中允许 Jarvis，然后重试。'));
+        reject(new Error('Ashley 还需要获得“自动化”权限来控制 System Events。请在系统设置的“隐私与安全性 → 自动化”中允许 Ashley，然后重试。'));
       } else {
         resolve();
       }
@@ -1069,7 +1069,7 @@ async function executeComputerAction(name: string, rawArgs: unknown) {
 //   error the user cannot recover from by talking, since the way out is the
 //   thing that broke.
 const doubaoInstructions = [
-  '你是 Ashley，运行在用户 Mac 上的语音管家；内部工程名仍为 Jarvis。声音成熟、低沉、克制。',
+  '你是 Ashley，运行在用户 Mac 上的语音管家。声音成熟、低沉、克制。',
   '',
   '最重要的规则：调用工具时，先调用，再说话。工具调用本身就是回应。',
   '',
@@ -1239,14 +1239,14 @@ function getRealtimeSessionConfig() {
       {
         type: 'function',
         name: 'quit_jarvis',
-        description: '当用户明确说“完全退出”“彻底退出”“完全退出 Jarvis”“退出 Jarvis 程序”“退出程序”“关闭 Jarvis”“关闭 Jarvis 程序”“关闭程序”或同等明确表述时，必须立即直接调用。单独说“完全退出”已经足够明确。调用后应用进程会立即关闭，不能说话、解释或确认。普通“退出”才使用 end_conversation。',
+        description: '当用户明确说“完全退出”“彻底退出”“完全退出 Ashley”“退出 Ashley 程序”“退出程序”“关闭 Ashley”“关闭 Ashley 程序”“关闭程序”或同等明确表述时，必须立即直接调用。单独说“完全退出”已经足够明确。调用后应用进程会立即关闭，不能说话、解释或确认。普通“退出”才使用 end_conversation。',
         parameters: { type: 'object', properties: {}, additionalProperties: false }
       },
       {
         type: 'function',
         name: 'perform_head_gesture',
         description:
-          '当用户明确命令 Jarvis 点头、点点头、摇头或摇摇头时立即调用。nod 表示自然点头，shake 表示自然摇头。用户只是在询问“你会不会点头/摇头”时不要擅自动作，但要如实回答支持这些动作。',
+          '当用户明确命令 Ashley 点头、点点头、摇头或摇摇头时立即调用。nod 表示自然点头，shake 表示自然摇头。用户只是在询问“你会不会点头/摇头”时不要擅自动作，但要如实回答支持这些动作。',
         parameters: {
           type: 'object',
           properties: {
@@ -1300,7 +1300,7 @@ function getRealtimeSessionConfig() {
       {
         type: 'function',
         name: 'switch_desktop',
-        description: '切换 macOS 桌面（Spaces）。用户要求切换到第一个桌面、第二个桌面、上一个桌面或下一个桌面，或只说“切换桌面”时直接调用。它会先检查 Jarvis 的辅助功能与自动化授权。',
+        description: '切换 macOS 桌面（Spaces）。用户要求切换到第一个桌面、第二个桌面、上一个桌面或下一个桌面，或只说“切换桌面”时直接调用。它会先检查 Ashley 的辅助功能与自动化授权。',
         parameters: {
           type: 'object',
           properties: {
@@ -1459,7 +1459,7 @@ function getRealtimeSessionConfig() {
       token_limits: { post_instructions: 8000 }
     },
     instructions:
-      '你是运行在用户 Mac 上的 Ashley 语音入口；内部工程名仍为 Jarvis。声音表达成熟、低沉、克制、清晰，语速自然，中文咬字清楚，不模仿任何真人或影视角色。一般回答控制在两三句话，用户明确要求展开时再详细说明，并始终说完整句子。不要说“正在思考”“稍等”之类拖延语。天气问题必须调用 get_weather 并原样朗读结果；观澜相关问题调用 query_guanlan，只依据返回数据回答并说明数据时间、缺失或过期状态，不提供自动买卖指令。时间问题调用 get_current_time；酷狗或网易云播放调用 play_music，播放控制调用 control_music；桌面切换调用 switch_desktop。无法由内置工具可靠完成的操作直接简洁说明。用户单独说“Ashley”“艾希莉”“艾什莉”“阿什利”“Jarvis”“贾维斯”或要求现身时调用 show_jarvis。明确要求完全退出程序时调用 quit_jarvis；普通告别、休眠或待机调用 end_conversation，调用前不要说话。用户明确命令点头、摇头或转动时调用对应头部动作工具。'
+      '你是运行在用户 Mac 上的 Ashley 语音入口。声音表达成熟、低沉、克制、清晰，语速自然，中文咬字清楚，不模仿任何真人或影视角色。一般回答控制在两三句话，用户明确要求展开时再详细说明，并始终说完整句子。不要说“正在思考”“稍等”之类拖延语。天气问题必须调用 get_weather 并原样朗读结果；观澜相关问题调用 query_guanlan，只依据返回数据回答并说明数据时间、缺失或过期状态，不提供自动买卖指令。时间问题调用 get_current_time；酷狗或网易云播放调用 play_music，播放控制调用 control_music；桌面切换调用 switch_desktop。无法由内置工具可靠完成的操作直接简洁说明。用户单独说“Ashley”“艾希莉”“艾什莉”“阿什利”“Jarvis”“贾维斯”或要求现身时调用 show_jarvis。明确要求完全退出程序时调用 quit_jarvis；普通告别、休眠或待机调用 end_conversation，调用前不要说话。用户明确命令点头、摇头或转动时调用对应头部动作工具。'
   };
 }
 
@@ -1678,7 +1678,7 @@ function createJarvisWindow() {
   jarvisWindow.on('hide', () => sendToVisual('jarvis:visible', false));
   jarvisWindow.webContents.on('console-message', (event) => {
     const { message } = event;
-    if (message.startsWith('[Jarvis]')) log(message.slice('[Jarvis]'.length).trim());
+    if (message.startsWith('[Ashley]')) log(message.slice('[Ashley]'.length).trim());
   });
   jarvisWindow.webContents.on('unresponsive', () => {
     log('Helmet renderer became unresponsive; hiding and reloading only the visual window.');
@@ -1739,7 +1739,7 @@ function createVoiceWindow() {
   });
   voiceWindow.webContents.on('console-message', (event) => {
     const { message } = event;
-    if (message.startsWith('[Jarvis]')) log(`[VoiceCore] ${message.slice('[Jarvis]'.length).trim()}`);
+    if (message.startsWith('[Ashley]')) log(`[VoiceCore] ${message.slice('[Ashley]'.length).trim()}`);
   });
   voiceWindow.webContents.on('render-process-gone', (_event, details) => {
     log(`Voice core exited (${details.reason}); restarting it without touching the desktop.`);

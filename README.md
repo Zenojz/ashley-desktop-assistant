@@ -13,6 +13,37 @@ The repository ships with an optimized, openly licensed sci-fi helmet and
 programmatically generated sound effects. It does not include API credentials,
 personal wake-word models, voice-training samples, or local recordings.
 
+## Community Edition
+
+This is the Community Edition. It is a complete, working assistant, but it is
+not everything the author runs locally. The boundary is stated here so that
+nobody has to clone the project to discover it.
+
+**Included and fully functional**
+
+- Wake word, including enrolling your own voice for a personal wake model
+- Realtime voice conversation through Doubao or OpenAI, with barge-in
+- The transparent 3D avatar: assembly, fracture, rotation, and gestures
+- Weather, using device location
+- Apple Maps search and directions
+- Launching and quitting applications, including localized Chinese app names
+- macOS Spaces switching
+- Experimental music control for Kugou and NetEase Cloud Music
+
+**Deliberately not included**
+
+- **The Codex bridge.** In the author's private build, the assistant can hand a
+  task to a coding agent that writes and runs code, and can drive other
+  applications through the macOS accessibility APIs. That path executes
+  arbitrary commands on the host and needs a carefully restricted environment
+  to be safe. Shipping it enabled-by-default to strangers is not a risk this
+  project is willing to take on, so it is not part of the public build.
+- **The holographic map.** It depends on a separate private application.
+
+Everything listed as included works without either of them. Nothing in this
+repository is stubbed out or crippled: the omissions are whole features that
+were removed cleanly, not disabled code paths.
+
 ## Requirements
 
 - macOS 13 Ventura or newer (Apple silicon is the primary tested target)

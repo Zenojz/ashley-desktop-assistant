@@ -1,4 +1,5 @@
 import { inferSpokenHideRequest } from './spoken-hide';
+import { inferSpokenMusicRequest } from './spoken-music';
 import WakeWordEngine from 'openwakeword-wasm-browser';
 import { voiceConfig } from './voice-config';
 import {
@@ -94,6 +95,8 @@ let wakeWarmupUntil = 0;
 // preventing one-off room speech from opening Jarvis.
 let pendingWakeCandidateAt = 0;
 let pendingWakeCandidateScore = 0;
+let pendingPersonalWakeCandidateAt = 0;
+let pendingPersonalWakeCandidateScore = 0;
 // Set when the provider starts a response and cleared when it ends. A non-null
 // value when audio stops means the provider never closed the turn.
 let openResponseId: string | null = null;
@@ -177,6 +180,13 @@ type WakeEnrollment = {
 };
 
 const personalWakeEnrollmentSamples = 12;
+// Enrollment happens under one room/distance condition, while later summons
+// can land a few thousandths lower. Preserve the trained threshold on disk and
+// apply only a small runtime tolerance; ordinary speech remains materially
+// below this boundary.
+const personalWakeRuntimeTolerance = 0.015;
+const personalWakeSingleHitBoost = 0.02;
+const personalWakeConfirmationMs = 4_000;
 let personalWakeModel: PersonalWakeModel | null = null;
 let wakeEnrollment: WakeEnrollment | null = null;
 
@@ -282,17 +292,44 @@ async function inspectPersonalWakeAtSpeechEnd() {
     const startedAt = performance.now();
     const personalScore = scorePersonalWake(model, features);
     const latencyMs = performance.now() - startedAt;
-    const rescueThreshold = model.rescueThreshold ?? Math.min(0.98, model.threshold + 0.02);
+    const configuredRescueThreshold = model.rescueThreshold ?? model.threshold;
+    const rescueThreshold = Math.max(0.45, configuredRescueThreshold - personalWakeRuntimeTolerance);
     const nearThreshold = rescueThreshold - 0.12;
     if (personalScore >= nearThreshold) {
       recordVoiceEvent(
         `Personal wake rescue ${model.rescueMode}: score=${personalScore.toFixed(3)}, `
-        + `threshold=${rescueThreshold.toFixed(3)}, latency=${latencyMs.toFixed(1)}ms.`
+        + `threshold=${rescueThreshold.toFixed(3)} `
+        + `(configured=${configuredRescueThreshold.toFixed(3)}), `
+        + `latency=${latencyMs.toFixed(1)}ms.`
       );
     }
     if (model.rescueMode === 'active' && personalScore >= rescueThreshold) {
-      recordVoiceEvent('Personal wake rescue accepted an utterance missed by the community model.');
-      await handleWakeDetection(1, features);
+      const now = performance.now();
+      const strongSingleHit = personalScore >= Math.min(
+        0.98,
+        configuredRescueThreshold + personalWakeSingleHitBoost
+      );
+      const repeatedCandidate = pendingPersonalWakeCandidateAt > 0
+        && now - pendingPersonalWakeCandidateAt <= personalWakeConfirmationMs;
+      if (strongSingleHit || repeatedCandidate) {
+        recordVoiceEvent(
+          `Personal wake rescue accepted an utterance missed by the community model `
+          + `(score=${personalScore.toFixed(3)}, `
+          + `confirmation=${strongSingleHit
+            ? 'strong-single'
+            : `repeated:${pendingPersonalWakeCandidateScore.toFixed(3)},${personalScore.toFixed(3)}`}).`
+        );
+        pendingPersonalWakeCandidateAt = 0;
+        pendingPersonalWakeCandidateScore = 0;
+        await handleWakeDetection(1, features);
+      } else {
+        pendingPersonalWakeCandidateAt = now;
+        pendingPersonalWakeCandidateScore = personalScore;
+        recordVoiceEvent(
+          `Personal wake rescue candidate requires a second match `
+          + `(score=${personalScore.toFixed(3)}).`
+        );
+      }
     }
   } catch (error) {
     recordVoiceEvent(
@@ -518,6 +555,8 @@ async function startWakeWord() {
     wakeWarmupUntil = performance.now() + wakeWarmupMs;
     pendingWakeCandidateAt = 0;
     pendingWakeCandidateScore = 0;
+    pendingPersonalWakeCandidateAt = 0;
+    pendingPersonalWakeCandidateScore = 0;
     await wakeEngine.start({ gain: voiceConfig.wakeGain });
     await enableWakeMicrophoneSpeechProcessing();
     wakeRunning = true;
@@ -544,6 +583,8 @@ async function stopWakeWord() {
   wakeEngineStartedAt = 0;
   pendingWakeCandidateAt = 0;
   pendingWakeCandidateScore = 0;
+  pendingPersonalWakeCandidateAt = 0;
+  pendingPersonalWakeCandidateScore = 0;
   await wakeEngine.stop();
 }
 
@@ -729,42 +770,6 @@ type SpokenCommandFallback = {
   excludeKeywords?: string[];
   maxLength?: number;
 };
-
-function inferSpokenMusicRequest(rawText: string): Record<string, unknown> | null {
-  const compact = rawText.replace(/[，。！？!?,]/g, '').trim();
-  const application = /网易云/.test(compact)
-    ? 'netease'
-    : /酷狗/.test(compact)
-      ? 'kugou'
-      : 'auto';
-  if (/暂停|继续播放|恢复播放|上一首|下一首/.test(compact)) return null;
-
-  // ASR can merge a correction with the previous phrase, for example
-  // “播放周杰伦。用酷狗播放周杰伦的青花瓷”。Use the last playback verb so
-  // the earlier fragment cannot leak into the artist argument.
-  const playbackVerb = /(?:播放|放一首|放首|放)/g;
-  let requestStart = -1;
-  for (let match = playbackVerb.exec(compact); match; match = playbackVerb.exec(compact)) {
-    requestStart = match.index + match[0].length;
-  }
-  if (requestStart < 0) return null;
-  let request = compact.slice(requestStart)
-    .replace(/^(?:一下|一首|首|歌曲)/, '')
-    .replace(/(?:这首歌|这首|给我听|听一下|听听)$/g, '')
-    .replace(/^[《「“"]|[》」”"]$/g, '')
-    .trim();
-  if (!request || /^(?:歌|歌曲|音乐)$/.test(request)) return null;
-
-  let artist = '';
-  let song = request;
-  const possessive = request.match(/^(.{1,20})的(.{1,40})$/);
-  if (possessive) {
-    artist = possessive[1].trim();
-    song = possessive[2].trim();
-  }
-  if (!song) return null;
-  return { song, artist, application };
-}
 
 function inferSpokenGuanlanOpenRequest(rawText: string): Record<string, unknown> | null {
   const compact = rawText.replace(/[，。！？!?,.\s]/g, '');
@@ -1974,11 +1979,17 @@ async function handleWakeDetection(score: number, wakeFeatures: number[] | null)
       try {
         const personalScore = scorePersonalWake(personalWakeModel, wakeFeatures);
         const verificationMs = performance.now() - verificationStartedAt;
+        const effectiveThreshold = Math.max(
+          0.45,
+          personalWakeModel.threshold - personalWakeRuntimeTolerance
+        );
         recordVoiceEvent(
           `Personal wake ${personalWakeModel.mode}: score=${personalScore.toFixed(3)}, `
-          + `threshold=${personalWakeModel.threshold.toFixed(3)}, latency=${verificationMs.toFixed(1)}ms.`
+          + `threshold=${effectiveThreshold.toFixed(3)} `
+          + `(configured=${personalWakeModel.threshold.toFixed(3)}), `
+          + `latency=${verificationMs.toFixed(1)}ms.`
         );
-        if (personalWakeModel.mode === 'active' && personalScore < personalWakeModel.threshold) {
+        if (personalWakeModel.mode === 'active' && personalScore < effectiveThreshold) {
           pendingWakeCandidateAt = 0;
           pendingWakeCandidateScore = 0;
           recordVoiceEvent('Wake word rejected by the active personal verifier.');
@@ -2012,6 +2023,8 @@ async function handleWakeDetection(score: number, wakeFeatures: number[] | null)
   }
   pendingWakeCandidateAt = 0;
   pendingWakeCandidateScore = 0;
+  pendingPersonalWakeCandidateAt = 0;
+  pendingPersonalWakeCandidateScore = 0;
   wakeTransition = true;
   try {
     recordVoiceEvent(`Wake word accepted (score=${score.toFixed(3)}).`);
@@ -2131,8 +2144,17 @@ export function initializeVoiceAssistant() {
       await window.jarvis.savePersonalWakeModel(personalWakeModel);
       recordVoiceEvent('Personal wake independent rescue channel initialized in shadow mode.');
     }
-    if (personalWakeModel && !Number.isFinite(personalWakeModel.rescueThreshold)) {
-      const rescueThreshold = Math.min(0.98, personalWakeModel.threshold + 0.02);
+    const legacyRaisedRescueThreshold = personalWakeModel
+      ? Math.min(0.98, personalWakeModel.threshold + 0.02)
+      : Number.NaN;
+    if (
+      personalWakeModel
+      && (
+        !Number.isFinite(personalWakeModel.rescueThreshold)
+        || Math.abs(Number(personalWakeModel.rescueThreshold) - legacyRaisedRescueThreshold) < 1e-6
+      )
+    ) {
+      const rescueThreshold = personalWakeModel.threshold;
       personalWakeModel = {
         ...personalWakeModel,
         rescueThreshold

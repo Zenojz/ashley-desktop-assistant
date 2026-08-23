@@ -610,6 +610,69 @@ function runAppleScript(script: string, args: string[], timeout = 12_000) {
   });
 }
 
+async function readKugouNowPlaying(expectedSong: string) {
+  const script = [
+    'on run argv',
+    '  set expectedSong to item 1 of argv',
+    '  tell application "System Events"',
+    '    tell process "酷狗音乐"',
+    '      set mainWindow to missing value',
+    '      repeat with candidateWindow in windows',
+    '        try',
+    '          set {candidateWidth, candidateHeight} to size of candidateWindow',
+    '          if candidateWidth >= 900 and candidateHeight >= 600 then set mainWindow to candidateWindow',
+    '        end try',
+    '      end repeat',
+    '      if mainWindow is missing value then return ""',
+    '      set {windowX, windowY} to position of mainWindow',
+    '      set {windowWidth, windowHeight} to size of mainWindow',
+    '      set playerBandY to windowY + windowHeight - 150',
+    '      repeat with uiItem in entire contents of mainWindow',
+    '        try',
+    '          set itemDescription to description of uiItem as text',
+    '          set {itemX, itemY} to position of uiItem',
+    '          if itemY >= playerBandY and itemDescription contains expectedSong then return itemDescription',
+    '        end try',
+    '      end repeat',
+    '      return ""',
+    '    end tell',
+    '  end tell',
+    'end run'
+  ].join('\n');
+  return runAppleScript(script, [expectedSong], 12_000);
+}
+
+async function clickKugouFirstSearchResult() {
+  const script = [
+    'on run',
+    '  tell application "System Events"',
+    '    tell process "酷狗音乐"',
+    '      set frontmost to true',
+    '      set mainWindow to missing value',
+    '      repeat with candidateWindow in windows',
+    '        try',
+    '          set {candidateWidth, candidateHeight} to size of candidateWindow',
+    '          if candidateWidth >= 900 and candidateHeight >= 600 then set mainWindow to candidateWindow',
+    '        end try',
+    '      end repeat',
+    '      if mainWindow is missing value then return ""',
+    '      set {windowX, windowY} to position of mainWindow',
+    '      set {windowWidth, windowHeight} to size of mainWindow',
+    '      -- Kugou lays out the first exact-title row at the same relative',
+    '      -- point in both compact and full-screen windows. Relative geometry',
+    '      -- avoids the old fixed-pixel click landing in blank space.',
+    '      set resultX to windowX + ((windowWidth * 15) div 100)',
+    '      set resultY to windowY + ((windowHeight * 41) div 100)',
+    '      click at {resultX, resultY}',
+    '      delay 1.2',
+    '      return "clicked"',
+    '    end tell',
+    '  end tell',
+    'end run'
+  ].join('\n');
+  return runAppleScript(script, [], 5_000);
+}
+
 function openApplicationByBundleId(bundleId: string) {
   return new Promise<void>((resolve, reject) => {
     execFile('/usr/bin/open', ['-b', bundleId], { timeout: 10_000 }, (error) => {
@@ -640,7 +703,10 @@ async function playMusic(
   }
 
   const details = musicApplicationDetails[applicationName];
-  const query = artist ? `${song} ${artist}` : song;
+  // Kugou ranks some artist-qualified Chinese searches incorrectly (for
+  // example “月牙湾 飞儿乐团” resolves to the unrelated singer 菲儿). Search by
+  // exact title, then verify that the now-playing bar changed to that song.
+  const query = applicationName === 'kugou' ? song : artist ? `${song} ${artist}` : song;
   await openApplicationByBundleId(details.bundleId);
   if (applicationName === 'kugou') {
     const clipboardSnapshot = snapshotClipboard();
@@ -652,31 +718,52 @@ async function playMusic(
         '    tell process "酷狗音乐"',
         '      set frontmost to true',
         '      delay 0.45',
-        '      set {windowX, windowY} to position of front window',
-        '      set {windowWidth, windowHeight} to size of front window',
-        '      if windowWidth < 900 or windowHeight < 600 then error "酷狗音乐窗口太小，请把窗口恢复到普通大小后再试。"',
-        '      -- The left search pane is stable relative to the window even',
-        '      -- when Kugou opens its optional artist panel on the right.',
-        '      click at {windowX + 300, windowY + 64}',
+        '      set mainWindow to missing value',
+        '      repeat with candidateWindow in windows',
+        '        try',
+        '          set {candidateWidth, candidateHeight} to size of candidateWindow',
+        '          if candidateWidth >= 900 and candidateHeight >= 600 then set mainWindow to candidateWindow',
+        '        end try',
+        '      end repeat',
+        '      if mainWindow is missing value then error "没有找到酷狗音乐主窗口，请把窗口恢复到普通大小后再试。"',
+        '      set {windowX, windowY} to position of mainWindow',
+        '      set {windowWidth, windowHeight} to size of mainWindow',
+        '      -- Kugou 2026 places search in the right side of the title bar.',
+        '      -- Anchor from the right edge so resizing does not move this',
+        '      -- click onto the top navigation tabs.',
+        '      click at {windowX + windowWidth - 255, windowY + 64}',
         '      delay 0.12',
         '      keystroke "a" using command down',
         '      keystroke "v" using command down',
         '      key code 36',
-        '      -- The first Return opens Kugou\'s search page; the second one',
-        '      -- submits the query. A single Return only opens the app/search.',
-        '      delay 0.55',
-        '      key code 36',
-        '      delay 1.8',
-        '      -- An exact song-and-artist query puts the playable title first.',
-        '      -- Click the title, not the adjacent add/MV buttons.',
-        '      click at {windowX + 178, windowY + 318}',
-        '      delay 0.8',
-        '      return "played"',
+        '      delay 2.4',
+        '      return "searched"',
         '    end tell',
         '  end tell',
         'end run'
       ].join('\n');
-      await runAppleScript(script, [], 8_000);
+      await runAppleScript(script, [], 10_000);
+      await clickKugouFirstSearchResult();
+      let nowPlaying = await readKugouNowPlaying(song);
+      if (!nowPlaying) {
+        log(`Kugou did not play ${JSON.stringify(song)} after the first Return; submitting again.`);
+        const retryScript = [
+          'on run',
+          '  tell application "System Events"',
+          '    tell process "酷狗音乐"',
+          '      set frontmost to true',
+          '      key code 36',
+          '      delay 2.4',
+          '    end tell',
+          '  end tell',
+          'end run'
+        ].join('\n');
+        await runAppleScript(retryScript, [], 5_000);
+        await clickKugouFirstSearchResult();
+        nowPlaying = await readKugouNowPlaying(song);
+      }
+      if (!nowPlaying) throw new Error(`播放栏没有切换到《${song}》`);
+      log(`Kugou now-playing confirmed: ${nowPlaying}`);
     } catch (error) {
       log(`Kugou play failed for ${JSON.stringify(query)}: ${error instanceof Error ? error.message : String(error)}`);
       throw new Error(`酷狗没有切换到《${song}》，所以我没有报告播放成功。`);
@@ -731,14 +818,51 @@ async function controlMusic(applicationName: MusicApplication, action: MusicCont
 
   const details = musicApplicationDetails[applicationName];
   await openApplicationByBundleId(details.bundleId);
-  const menuName = applicationName === 'kugou' ? '播放控制' : '控制';
+  if (applicationName === 'kugou') {
+    // Kugou exposes a “播放控制” menu to Accessibility, but its actions do
+    // nothing in the current Mac release. Use the verified bottom transport
+    // controls, anchored to the ordinary window instead.
+    const xOffset = action === 'previous' ? 118 : action === 'next' ? 236 : 176;
+    const script = [
+      'on run argv',
+      '  set controlX to item 1 of argv as integer',
+      '  tell application "System Events"',
+      '    tell process "酷狗音乐"',
+      '      set frontmost to true',
+      '      delay 0.25',
+      '      key code 53',
+      '      delay 0.12',
+      '      set mainWindow to missing value',
+      '      repeat with candidateWindow in windows',
+      '        try',
+      '          set {candidateWidth, candidateHeight} to size of candidateWindow',
+      '          if candidateWidth >= 900 and candidateHeight >= 600 then set mainWindow to candidateWindow',
+      '        end try',
+      '      end repeat',
+      '      if mainWindow is missing value then error "没有找到酷狗音乐主窗口，请把窗口恢复到普通大小后再试。"',
+      '      set {windowX, windowY} to position of mainWindow',
+      '      set {windowWidth, windowHeight} to size of mainWindow',
+      '      click at {windowX + controlX, windowY + windowHeight - 37}',
+      '      delay 0.35',
+      '    end tell',
+      '  end tell',
+      'end run'
+    ].join('\n');
+    await runAppleScript(script, [String(xOffset)]);
+    lastMusicApplication = applicationName;
+    return action === 'next'
+      ? '已切换到下一首。'
+      : action === 'previous'
+        ? '已切换到上一首。'
+        : '已切换播放或暂停。';
+  }
+
+  const menuName = '控制';
   const itemNames = action === 'next'
-    ? [applicationName === 'kugou' ? '下一曲' : '下一个']
+    ? ['下一个']
     : action === 'previous'
-      ? [applicationName === 'kugou' ? '上一曲' : '上一个']
-      : applicationName === 'kugou'
-        ? ['播放/暂停']
-        : ['暂停', '播放'];
+      ? ['上一个']
+      : ['暂停', '播放'];
   const script = [
     'on run argv',
     '  set processName to item 1 of argv',

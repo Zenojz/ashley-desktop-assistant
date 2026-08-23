@@ -1,5 +1,7 @@
 # Ashley
 
+![Ashley desktop assistant preview](docs/preview.png)
+
 Built and demoed on Douyin by [@陆叁昧](https://www.douyin.com/user/601786286)
 (Douyin ID `601786286`), where the build process, the mistakes, and the parts
 that took several attempts are documented as they happened.

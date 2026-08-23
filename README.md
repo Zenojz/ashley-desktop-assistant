@@ -1,5 +1,9 @@
 # Ashley
 
+Built and demoed on Douyin by [@陆叁昧](https://www.douyin.com/user/601786286)
+(Douyin ID `601786286`), where the build process, the mistakes, and the parts
+that took several attempts are documented as they happened.
+
 Ashley is a macOS desktop voice assistant. Its transparent Three.js avatar
 floats above the desktop and supports voice interaction, assembly and fracture
 effects, rotation, gestures, weather lookup, and experimental music control.

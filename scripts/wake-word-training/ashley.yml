@@ -1,0 +1,58 @@
+## Official openWakeWord custom-model configuration for the Ashley keyword.
+## Run from the training workspace prepared by run-ashley-training.sh.
+
+model_name: "ashley"
+target_phrase:
+  - "Ashley"
+
+# Near-sounding negatives are generated automatically by openWakeWord. These
+# explicit confusers cover common words/names observed in English media.
+custom_negative_phrases:
+  - "actually"
+  - "Ashleigh"
+  - "Ashley is"
+  - "ask Lee"
+  - "cash please"
+  - "lastly"
+
+# The official example recommends a minimum of 20,000 positive generations.
+n_samples: 20000
+n_samples_val: 4000
+# Stress-tested on this Apple Silicon machine. The official generator advises
+# raising this when GPU acceleration is available; adversarial batches use /7.
+tts_batch_size: 140
+# Adversarial phrases vary in length, so keep this below the positive batch.
+tts_negative_batch_size: 140
+augmentation_batch_size: 16
+
+piper_sample_generator_path: "./piper-sample-generator"
+output_dir: "./output"
+
+rir_paths:
+  - "./piper-sample-generator/impulses"
+background_paths:
+  - "./background_clips"
+background_paths_duplication_rate:
+  - 1
+
+# Official ~11 hour mixed speech/noise/music false-positive validation set.
+false_positive_validation_data_path: "./validation_set_features.npy"
+augmentation_rounds: 1
+
+feature_data_files:
+  # Public negative speech/noise/music features released by openWakeWord.
+  "ACAV100M_sample": "./openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
+  # Local acoustic features only; no recordings are exported or uploaded.
+  "local_personal_negatives": "./local_personal_negatives.npy"
+
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "local_personal_negatives": 64
+  "adversarial_negative": 64
+  "positive": 64
+
+model_type: "dnn"
+layer_size: 64
+steps: 50000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2

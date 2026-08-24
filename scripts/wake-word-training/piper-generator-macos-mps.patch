@@ -1,0 +1,108 @@
+diff --git a/generate_samples.py b/generate_samples.py
+index c11184e..24072fd 100755
+--- a/generate_samples.py
++++ b/generate_samples.py
+@@ -1,10 +1,14 @@
+ #!/usr/bin/env python3
+ import argparse
++import ctypes
++from ctypes.util import find_library
++from concurrent.futures import ThreadPoolExecutor
+ import itertools as it
+ import json
+ import os
+ import gc
+ import logging
++import platform
+ import unicodedata
+ import wave
+ from pathlib import Path
+@@ -17,7 +20,7 @@ import numpy as np
+ import torch
+ import torchaudio
+ 
+-from espeak_phonemizer import Phonemizer
++from espeak_phonemizer import Phonemizer, StreamType
+ from piper_train.vits import commons
+ 
+ _DIR = Path(__file__).parent
+@@ -71,13 +74,18 @@ def generate_samples(
+ 
+     _LOGGER.debug("Loading %s", model)
+     model_path = Path(model)
+-    model = torch.load(model_path)
++    # Piper's released checkpoint is a complete trusted model object. Newer
++    # PyTorch releases default to weights_only=True, which cannot load it.
++    model = torch.load(model_path, map_location="cpu", weights_only=False)
+     model.eval()
+     _LOGGER.info("Successfully loaded the model")
+ 
+     if torch.cuda.is_available():
+         model.cuda()
+         _LOGGER.debug("CUDA available, using GPU")
++    elif torch.backends.mps.is_available():
++        model.to("mps")
++        _LOGGER.debug("Apple MPS available, using GPU")
+ 
+     output_dir = Path(output_dir)
+     output_dir.mkdir(parents=True, exist_ok=True)
+@@ -92,7 +101,22 @@ def generate_samples(
+     if max_speakers is not None:
+         num_speakers = min(num_speakers, max_speakers)
+ 
+-    phonemizer = Phonemizer(voice)
++    if platform.system() == "Darwin":
++        # espeak-phonemizer hard-codes Linux .so/libc names. Use the Homebrew
++        # dylib and the no-stream API, which returns the same IPA phonemes.
++        phonemizer = Phonemizer(voice, stream_type=StreamType.NONE)
++        espeak_library = os.environ.get("ESPEAK_NG_LIBRARY") or find_library("espeak-ng")
++        if not espeak_library:
++            raise RuntimeError(
++                "Cannot locate espeak-ng; install it or set ESPEAK_NG_LIBRARY"
++            )
++        phonemizer.lib_espeak = ctypes.cdll.LoadLibrary(espeak_library)
++        sample_rate = phonemizer.lib_espeak.espeak_Initialize(
++            Phonemizer.AUDIO_OUTPUT_SYNCHRONOUS, 0, None, 0
++        )
++        assert sample_rate > 0, "Failed to initialize Homebrew libespeak-ng"
++    else:
++        phonemizer = Phonemizer(voice)
+ 
+     max_len = None
+ 
+@@ -174,9 +198,15 @@ def generate_samples(
+             audio = resampler(audio.cpu()).numpy()
+ 
+             audio_int16 = audio_float_to_int16(audio)
+-            for audio_idx in range(audio_int16.shape[0]):
+-                # Use webrtcvad to trip silence from the clips
+-                audio_data = remove_silence(audio_int16[audio_idx].flatten())[None,]
++            # Each clip owns its own webrtcvad instance, so the exact official
++            # silence trimming can run safely in parallel on Apple CPU cores.
++            with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
++                trimmed_audio = list(pool.map(
++                    lambda clip: remove_silence(clip.flatten()),
++                    audio_int16,
++                ))
++            for audio_idx, trimmed in enumerate(trimmed_audio):
++                audio_data = trimmed[None,]
+ 
+                 if isinstance(file_names, it.cycle):
+                     wav_path = output_dir / next(file_names)
+@@ -219,11 +249,11 @@ def generate_audio(model, speaker_1, speaker_2, phoneme_ids, slerp_weight, noise
+     x = torch.LongTensor(phoneme_ids)
+     x_lengths = torch.LongTensor([len(i) for i in phoneme_ids])
+ 
+-    if torch.cuda.is_available():
+-        speaker_1 = speaker_1.cuda()
+-        speaker_2 = speaker_2.cuda()
+-        x = x.cuda()
+-        x_lengths = x_lengths.cuda()
++    device = next(model.parameters()).device
++    speaker_1 = speaker_1.to(device)
++    speaker_2 = speaker_2.to(device)
++    x = x.to(device)
++    x_lengths = x_lengths.to(device)
+ 
+     x, m_p_orig, logs_p_orig, x_mask = model.enc_p(x, x_lengths)
+     emb0 = model.emb_g(speaker_1)

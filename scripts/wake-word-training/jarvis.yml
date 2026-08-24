@@ -1,0 +1,68 @@
+## Official openWakeWord custom-model configuration for the Jarvis keyword.
+## Run from the training workspace prepared by run-jarvis-training.sh.
+
+model_name: "jarvis"
+target_phrase:
+  - "Jarvis"
+
+# Jarvis is shorter than Hey Jarvis, so deliberately over-sample hard lexical
+# confusers. Chinese names/words are represented both literally for auditability
+# and with pronunciations the English LibriTTS Piper voice can render reliably.
+custom_negative_phrases:
+  - "Java"
+  - "jar"
+  - "jars"
+  - "job is"
+  - "Jervis"
+  - "Javitz"
+  - "Jah vis"
+  - "Jah vee"
+  - "Jia Wei"
+  - "Jia way"
+  - "Jiawei"
+  - "贾维"
+  - "家伟"
+  - "service"
+  - "services"
+  - "serve us"
+  - "serve this"
+  - "server is"
+  - "服务"
+
+n_samples: 20000
+n_samples_val: 4000
+# Short words need a larger adversarial set than Ashley.
+n_samples_negative: 30000
+n_samples_negative_val: 6000
+tts_batch_size: 140
+tts_negative_batch_size: 140
+augmentation_batch_size: 16
+
+piper_sample_generator_path: "./piper-sample-generator"
+output_dir: "./output"
+
+rir_paths:
+  - "./piper-sample-generator/impulses"
+background_paths:
+  - "./background_clips"
+background_paths_duplication_rate:
+  - 1
+
+false_positive_validation_data_path: "./validation_set_features.npy"
+augmentation_rounds: 1
+
+feature_data_files:
+  "ACAV100M_sample": "./openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
+  "local_personal_negatives": "./local_personal_negatives.npy"
+
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "local_personal_negatives": 64
+  "adversarial_negative": 96
+  "positive": 64
+
+model_type: "dnn"
+layer_size: 64
+steps: 50000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2

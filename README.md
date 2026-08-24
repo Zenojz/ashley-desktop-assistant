@@ -103,6 +103,11 @@ signed build.
 
 ## Ashley wake word
 
+The maintainer's Ashley and Jarvis word-level wake-word models
+(`ashley.onnx` and `jarvis.onnx`) are not included in this repository. Train
+models for your own voice locally with the tooling under
+`scripts/wake-word-training`; do not publish the resulting personal models.
+
 Open the tray menu and choose **录入 Ashley 唤醒声纹…** to record the local
 wake profile. The profile is stored outside the repository by Electron and is
 not uploaded as a project asset. Saying “Ashley” (including the supported

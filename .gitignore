@@ -18,3 +18,13 @@ recordings/
 voice-training/
 *.recording.wav
 *.recording.webm
+
+# Personal wake-word models are trained on the maintainer's own voice
+# and must never be published.
+assets/wake-word/models/ashley.onnx
+assets/wake-word/models/jarvis.onnx
+
+# Generated corpora, feature arrays, environments, and Python caches.
+scripts/wake-word-training/.work/
+scripts/wake-word-training/__pycache__/
+scripts/wake-word-training/*.pyc

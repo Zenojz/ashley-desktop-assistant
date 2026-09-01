@@ -43,9 +43,15 @@ export function loadEnvironment() {
   for (const name of [
     'JARVIS_VOICE_PROVIDER',
     'DOUBAO_VOICE',
-    'JARVIS_ALLOW_VOICE_FALLBACK'
+    'JARVIS_ALLOW_VOICE_FALLBACK',
+    'JARVIS_EXTRA_WAKE_MODELS'
   ]) {
     const value = readOwnedSetting(ownedEnvironment, name);
-    if (value) process.env[name] = value;
+    if (name === 'JARVIS_EXTRA_WAKE_MODELS') {
+      if (value === null) delete process.env[name];
+      else process.env[name] = value;
+    } else if (value) {
+      process.env[name] = value;
+    }
   }
 }

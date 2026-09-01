@@ -4,3 +4,6 @@ allowBuilds:
   electron-winstaller: false
   esbuild: true
   protobufjs: true
+
+patchedDependencies:
+  openwakeword-wasm-browser@0.1.1: patches/openwakeword-wasm-browser@0.1.1.patch

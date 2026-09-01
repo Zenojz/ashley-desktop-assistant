@@ -10,10 +10,19 @@ Ashley is a macOS desktop voice assistant. Its transparent Three.js avatar
 floats above the desktop and supports voice interaction, assembly and fracture
 effects, rotation, gestures, weather lookup, and experimental music control.
 
-The bundled wake-word model is a community model from openWakeWord whose
-trigger phrase is "Hey Jarvis"; the phrase belongs to that upstream model and
-is unrelated to this project's name. After enrolling your own voice, Ashley
-responds to "Ashley" through a locally trained personal wake model.
+## Wake-word availability and limitations
+
+- **Works out of the box:** only **“Hey Jarvis”**, using the bundled community
+  openWakeWord model. The phrase belongs to that upstream model and is
+  unrelated to this project's name.
+- **Experimental Ashley wake:** after you enroll your voice, **“Ashley”** can
+  wake the app through local personal acoustic-template matching. This path
+  verifies the enrolled speaker but has no independent word-level model, so it
+  can false-wake more often around television, music, or other speakers.
+- **Stable custom wake words:** train a word-level ONNX model with
+  `scripts/wake-word-training`, place it in `assets/wake-word/models/`, and
+  enable it with `JARVIS_EXTRA_WAKE_MODELS`. The repository does not include
+  the maintainer's personal models, thresholds, samples, or recordings.
 
 The repository ships with an optimized, openly licensed sci-fi helmet and
 programmatically generated sound effects. It does not include API credentials,
@@ -27,7 +36,8 @@ nobody has to clone the project to discover it.
 
 **Included and fully functional**
 
-- Wake word, including enrolling your own voice for a personal wake model
+- The bundled “Hey Jarvis” wake word, local personal voice enrollment, and a
+  configurable runtime path for word-level models you train yourself
 - Realtime voice conversation through Doubao or OpenAI, with barge-in
 - The transparent 3D avatar: assembly, fracture, rotation, and gestures
 - Weather, using device location
@@ -108,11 +118,21 @@ The maintainer's Ashley and Jarvis word-level wake-word models
 models for your own voice locally with the tooling under
 `scripts/wake-word-training`; do not publish the resulting personal models.
 
+To load models you trained yourself without editing TypeScript, put the ONNX
+files in `assets/wake-word/models/` and set one line in `.env`:
+
+```dotenv
+JARVIS_EXTRA_WAKE_MODELS=ashley:ashley.onnx,jarvis:jarvis.onnx
+```
+
+The bundled `hey_jarvis` model remains enabled. Remove or comment out that one
+line to return to the default single-model configuration.
+
 Open the tray menu and choose **录入 Ashley 唤醒声纹…** to record the local
 wake profile. The profile is stored outside the repository by Electron and is
-not uploaded as a project asset. Saying “Ashley” (including the supported
-Chinese transliterations) shows the avatar; legacy aliases remain for
-compatibility.
+not uploaded as a project asset. Without an Ashley word-level ONNX model, this
+enrolled personal path is experimental speaker/acoustic matching rather than
+true lexical recognition.
 
 ## Generated sound effects
 

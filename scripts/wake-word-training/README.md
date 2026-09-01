@@ -203,3 +203,28 @@ runtime threshold.
 - `consolidate-onnx.py`: embeds an adjacent ONNX weight file.
 - `evaluate-onnx-model.py`: threshold/recall/false-positive report.
 - `run-*-training.sh`: end-to-end resumable runners.
+
+## Connect a trained model to the runtime
+
+The runners copy their final models to the runtime model directory. If you
+exported a model manually, place it there yourself:
+
+```text
+assets/wake-word/models/ashley.onnx
+assets/wake-word/models/jarvis.onnx
+```
+
+Then add the keywords and filenames to the project `.env` file:
+
+```dotenv
+JARVIS_EXTRA_WAKE_MODELS=ashley:ashley.onnx,jarvis:jarvis.onnx
+```
+
+The format is a comma-separated list of `keyword:filename.onnx` pairs. Restart
+the application after changing it. The bundled `hey_jarvis` community model is
+always loaded as the default; removing or commenting out this single variable
+returns the runtime to that one model. No TypeScript changes are required.
+
+Do not commit generated ONNX models, thresholds, local feature datasets, or
+recordings. The personal model filenames above are intentionally ignored by
+Git.

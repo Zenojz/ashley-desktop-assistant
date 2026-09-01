@@ -1,0 +1,114 @@
+diff --git a/src/WakeWordEngine.js b/src/WakeWordEngine.js
+index 0b6e6a38c05b5fe115c4ac9276e5200fdc9e189b..21e79fdac4997847e63379401c442369757292b5 100644
+--- a/src/WakeWordEngine.js
++++ b/src/WakeWordEngine.js
+@@ -61,6 +61,8 @@ export class WakeWordEngine {
+         sampleRate = 16000,
+         vadHangoverFrames = 12,
+         detectionThreshold = 0.5,
++        detectionThresholds = {},
++        detectionGroups = {},
+         cooldownMs = 2000,
+         executionProviders = ['wasm'],
+         embeddingWindowSize = 16,
+@@ -74,6 +76,8 @@ export class WakeWordEngine {
+             sampleRate,
+             vadHangoverFrames,
+             detectionThreshold,
++            detectionThresholds,
++            detectionGroups,
+             cooldownMs,
+             executionProviders,
+             embeddingWindowSize,
+@@ -92,7 +96,7 @@ export class WakeWordEngine {
+         this._workletNode = null;
+         this._gainNode = null;
+         this._processingQueue = Promise.resolve();
+-        this._isDetectionCoolingDown = false;
++        this._coolingDetectionGroups = new Set();
+         this._loaded = false;
+     }
+
+@@ -132,7 +136,8 @@ export class WakeWordEngine {
+                 session,
+                 scores: new Array(50).fill(0),
+                 windowSize,
+-                history
++                history,
++                historyCount: 0
+             };
+             this._debug('Loaded keyword model', { keyword, file, windowSize });
+         }
+@@ -194,7 +199,7 @@ export class WakeWordEngine {
+             this._mediaStream.getTracks().forEach((track) => track.stop());
+             this._mediaStream = null;
+         }
+-        this._isDetectionCoolingDown = false;
++        this._coolingDetectionGroups.clear();
+         this._debug('Engine stopped and media stream closed');
+     }
+
+@@ -204,6 +209,21 @@ export class WakeWordEngine {
+         }
+     }
+
++    getKeywordEmbeddingSnapshot(keyword) {
++        const keywordModel = this._keywordModels?.[keyword];
++        if (!keywordModel) return null;
++        const accumulatedEmbeddings = Math.min(
++            keywordModel.windowSize,
++            keywordModel.historyCount ?? 0
++        );
++        return {
++            history: keywordModel.history.map((embedding) => new Float32Array(embedding)),
++            accumulatedEmbeddings,
++            requiredEmbeddings: keywordModel.windowSize,
++            complete: accumulatedEmbeddings >= keywordModel.windowSize
++        };
++    }
++
+     async runWav(buffer) {
+         if (!this._loaded) throw new Error('Call load() before runWav()');
+         this._resetState();
+@@ -253,10 +273,11 @@ export class WakeWordEngine {
+         }
+         this._isSpeechActive = false;
+         this._vadHangover = 0;
+-        this._isDetectionCoolingDown = false;
++        this._coolingDetectionGroups.clear();
+         if (this._keywordModels) {
+             for (const key of Object.keys(this._keywordModels)) {
+                 this._keywordModels[key].scores.fill(0);
++                this._keywordModels[key].historyCount = 0;
+                 const history = this._keywordModels[key].history;
+                 if (history) {
+                     for (let i = 0; i < history.length; i++) {
+@@ -342,6 +363,10 @@ export class WakeWordEngine {
+                 const keywordModel = this._keywordModels[name];
+                 keywordModel.history.shift();
+                 keywordModel.history.push(embeddingVector);
++                keywordModel.historyCount = Math.min(
++                    keywordModel.windowSize,
++                    (keywordModel.historyCount ?? 0) + 1
++                );
+
+                 const flattenedEmbeddings = new Float32Array(keywordModel.windowSize * 96);
+                 for (let j = 0; j < keywordModel.history.length; j++) {
+@@ -355,11 +380,14 @@ export class WakeWordEngine {
+                 this._debug('Keyword score', { keyword: name, score: Number(score.toFixed(3)), windowSize: keywordModel.windowSize });
+
+                 const keywordActive = this._activeKeywords.has(name);
+-                if (emitEvents && keywordActive && score > this.config.detectionThreshold && isSpeechActive && !this._isDetectionCoolingDown) {
+-                    this._isDetectionCoolingDown = true;
++                const threshold = this.config.detectionThresholds[name] ?? this.config.detectionThreshold;
++                const detectionGroup = this.config.detectionGroups[name] ?? name;
++                const detectionCoolingDown = this._coolingDetectionGroups.has(detectionGroup);
++                if (emitEvents && keywordActive && score > threshold && isSpeechActive && !detectionCoolingDown) {
++                    this._coolingDetectionGroups.add(detectionGroup);
+                     this._debug('Detection emitted', { keyword: name, score });
+                     this._emitter.emit('detect', { keyword: name, score, at: performance.now() });
+-                    setTimeout(() => { this._isDetectionCoolingDown = false; }, this.config.cooldownMs);
++                    setTimeout(() => { this._coolingDetectionGroups.delete(detectionGroup); }, this.config.cooldownMs);
+                 } else if (emitEvents && !keywordActive) {
+                     this._debug('Detection suppressed (inactive keyword)', { keyword: name, score });
+                 }

@@ -67,11 +67,12 @@ type OutputAudioQuality = {
 
 const wakeModelUrl = new URL('../assets/wake-word/models', window.location.href).href;
 const ortWasmUrl = new URL('../assets/wake-word/ort/', window.location.href).href;
+const configuredWakeModelFiles = Object.fromEntries(
+  voiceConfig.wakeModels.map(({ keyword, modelFile }) => [keyword, modelFile])
+);
 const wakeEngine = new WakeWordEngine({
-  keywords: [voiceConfig.wakeKeyword],
-  modelFiles: {
-    [voiceConfig.wakeKeyword]: voiceConfig.wakeModelFile
-  },
+  keywords: voiceConfig.wakeModels.map(({ keyword }) => keyword),
+  modelFiles: configuredWakeModelFiles,
   baseAssetUrl: wakeModelUrl,
   ortWasmPath: ortWasmUrl,
   detectionThreshold: voiceConfig.wakeThreshold,
@@ -97,6 +98,14 @@ let pendingWakeCandidateAt = 0;
 let pendingWakeCandidateScore = 0;
 let pendingPersonalWakeCandidateAt = 0;
 let pendingPersonalWakeCandidateScore = 0;
+const wakeKeywordArbitrationMs = 120;
+type LexicalWakeCandidate = {
+  keyword: string;
+  score: number;
+  wakeFeatures: WakeFeatureSnapshot | null;
+};
+let pendingLexicalWakeCandidates: LexicalWakeCandidate[] = [];
+let pendingLexicalWakeTimer: number | null = null;
 // Set when the provider starts a response and cleared when it ends. A non-null
 // value when audio stops means the provider never closed the turn.
 let openResponseId: string | null = null;
@@ -167,11 +176,14 @@ type WakeEngineWithMediaStream = WakeWordEngine & { _mediaStream?: MediaStream }
 type WakeEngineInternals = WakeEngineWithMediaStream & {
   _audioContext?: AudioContext | null;
   _workletNode?: AudioWorkletNode | null;
-  _keywordModels?: Record<string, {
-    history: Float32Array[];
-    scores: number[];
-    windowSize: number;
-  }>;
+};
+
+type WakeFeatureSnapshot = {
+  modelKeyword: string;
+  features: number[];
+  accumulatedEmbeddings: number;
+  requiredEmbeddings: number;
+  complete: boolean;
 };
 
 type WakeEnrollment = {
@@ -190,13 +202,15 @@ const personalWakeConfirmationMs = 4_000;
 let personalWakeModel: PersonalWakeModel | null = null;
 let wakeEnrollment: WakeEnrollment | null = null;
 
-function snapshotWakeFeatures() {
-  const keyword = (wakeEngine as WakeEngineInternals)._keywordModels?.[voiceConfig.wakeKeyword];
-  if (!keyword?.history?.length || keyword.history.some((embedding) => embedding.length !== 96)) return null;
-  const flattened = new Array<number>(keyword.history.length * 96);
+function snapshotWakeFeatures(modelKeyword: string): WakeFeatureSnapshot | null {
+  const snapshot = wakeEngine.getKeywordEmbeddingSnapshot(modelKeyword);
+  if (!snapshot?.history?.length || snapshot.history.some((embedding) => embedding.length !== 96)) {
+    return null;
+  }
+  const flattened = new Array<number>(snapshot.history.length * 96);
   let offset = 0;
   let energy = 0;
-  for (const embedding of keyword.history) {
+  for (const embedding of snapshot.history) {
     for (const value of embedding) {
       const numeric = Number(value);
       flattened[offset] = numeric;
@@ -204,7 +218,25 @@ function snapshotWakeFeatures() {
       offset += 1;
     }
   }
-  return energy > 1e-8 ? flattened : null;
+  if (snapshot.accumulatedEmbeddings > 0 && energy <= 1e-8) return null;
+  return {
+    modelKeyword,
+    features: flattened,
+    accumulatedEmbeddings: snapshot.accumulatedEmbeddings,
+    requiredEmbeddings: snapshot.requiredEmbeddings,
+    complete: snapshot.complete
+  };
+}
+
+function completeWakeFeatureVector(snapshot: WakeFeatureSnapshot | null) {
+  return snapshot?.complete ? snapshot.features : null;
+}
+
+function personalWakeFeatureKeyword() {
+  const personalKeyword = personalWakeModel?.keyword ?? 'ashley';
+  return voiceConfig.wakeModels.some(({ keyword }) => keyword === personalKeyword)
+    ? personalKeyword
+    : voiceConfig.wakeKeyword;
 }
 
 function reportWakeEnrollment(
@@ -228,7 +260,7 @@ async function captureWakeEnrollmentSample() {
   // taking the snapshot; no second microphone or recording path is opened.
   await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
   if (wakeEnrollment !== enrollment) return;
-  const sample = snapshotWakeFeatures();
+  const sample = completeWakeFeatureVector(snapshotWakeFeatures(personalWakeFeatureKeyword()));
   if (!sample) {
     reportWakeEnrollment('error', '这次没有得到完整特征，请靠近一点再录一次。');
     return;
@@ -286,8 +318,17 @@ async function inspectPersonalWakeAtSpeechEnd() {
     || wakeTransition
     || activeSession
   ) return;
-  const features = snapshotWakeFeatures();
-  if (!features) return;
+  const featureSnapshot = snapshotWakeFeatures(personalWakeFeatureKeyword());
+  const features = completeWakeFeatureVector(featureSnapshot);
+  if (!features) {
+    if (featureSnapshot) {
+      recordVoiceEvent(
+        `Personal wake rescue deferred until ${featureSnapshot.modelKeyword} embedding window is complete `
+        + `(${featureSnapshot.accumulatedEmbeddings}/${featureSnapshot.requiredEmbeddings}).`
+      );
+    }
+    return;
+  }
   try {
     const startedAt = performance.now();
     const personalScore = scorePersonalWake(model, features);
@@ -321,7 +362,7 @@ async function inspectPersonalWakeAtSpeechEnd() {
         );
         pendingPersonalWakeCandidateAt = 0;
         pendingPersonalWakeCandidateScore = 0;
-        await handleWakeDetection(1, features);
+        await handleWakeDetection(1, featureSnapshot, personalWakeFeatureKeyword());
       } else {
         pendingPersonalWakeCandidateAt = now;
         pendingPersonalWakeCandidateScore = personalScore;
@@ -544,7 +585,11 @@ async function startWakeWord() {
       log('Loading local OpenWakeWord models.');
       await wakeEngine.load();
       wakeLoaded = true;
-      log('Local OpenWakeWord model ready.');
+      recordVoiceEvent(
+        `Local OpenWakeWord models ready: ${voiceConfig.wakeModels
+          .map(({ keyword, modelFile }) => `${keyword}=${modelFile}`)
+          .join(', ')}.`
+      );
     }
     // Arm the warm-up window *before* the engine opens the microphone. The
     // engine can emit a detection on its very first inference, and the awaits
@@ -569,7 +614,9 @@ async function startWakeWord() {
       (device) => device.kind === 'audioinput' && device.deviceId === 'default'
     );
     log(`Wake microphone: ${defaultMicrophone?.label || 'system default input'}.`);
-    recordVoiceEvent('Listening locally for “Hey Jarvis”.');
+    recordVoiceEvent(
+      `Listening locally for: ${voiceConfig.wakeModels.map(({ keyword }) => keyword).join(', ')}.`
+    );
   } catch (error) {
     console.error('[Jarvis] Unable to start local wake-word detection.', error);
   } finally {
@@ -585,6 +632,9 @@ async function stopWakeWord() {
   pendingWakeCandidateScore = 0;
   pendingPersonalWakeCandidateAt = 0;
   pendingPersonalWakeCandidateScore = 0;
+  pendingLexicalWakeCandidates = [];
+  if (pendingLexicalWakeTimer !== null) window.clearTimeout(pendingLexicalWakeTimer);
+  pendingLexicalWakeTimer = null;
   await wakeEngine.stop();
 }
 
@@ -1943,7 +1993,11 @@ async function stopRealtimeSession(reason: string) {
   }
 }
 
-async function handleWakeDetection(score: number, wakeFeatures: number[] | null) {
+async function handleWakeDetection(
+  score: number,
+  wakeFeatureSnapshot: WakeFeatureSnapshot | null,
+  keyword: string
+) {
   if (wakeEnrollment) {
     // During an explicitly armed enrolment sample the phrase is training data,
     // not a command to open Jarvis. speech-end will save the same rolling
@@ -1954,11 +2008,11 @@ async function handleWakeDetection(score: number, wakeFeatures: number[] | null)
   if (!wakeRunning) {
     // Fired between wakeEngine.start() and the point where startWakeWord()
     // considers the engine live. Nothing legitimate arrives in that gap.
-    recordVoiceEvent(`Wake word ignored before the engine was live (score=${score.toFixed(3)}).`);
+    recordVoiceEvent(`Wake word ${keyword} ignored before the engine was live (score=${score.toFixed(3)}).`);
     return;
   }
   if (performance.now() < wakeResumeNotBefore) {
-    recordVoiceEvent(`Wake word ignored during post-sleep holdoff (score=${score.toFixed(3)}).`);
+    recordVoiceEvent(`Wake word ${keyword} ignored during post-sleep holdoff (score=${score.toFixed(3)}).`);
     return;
   }
   if (performance.now() < wakeWarmupUntil) {
@@ -1968,40 +2022,47 @@ async function handleWakeDetection(score: number, wakeFeatures: number[] | null)
     // guaranteed false wakes.
     pendingWakeCandidateAt = 0;
     pendingWakeCandidateScore = 0;
-    recordVoiceEvent(`Wake word ignored during engine warm-up (score=${score.toFixed(3)}).`);
+    recordVoiceEvent(`Wake word ${keyword} ignored during engine warm-up (score=${score.toFixed(3)}).`);
+    return;
+  }
+  const wakeFeatures = completeWakeFeatureVector(wakeFeatureSnapshot);
+  if (!wakeFeatures) {
+    const progress = wakeFeatureSnapshot
+      ? `${wakeFeatureSnapshot.accumulatedEmbeddings}/${wakeFeatureSnapshot.requiredEmbeddings}`
+      : 'unavailable';
+    recordVoiceEvent(
+      `Wake word ${keyword} skipped because its embedding window is incomplete `
+      + `(${progress}); wordScore=${score.toFixed(3)}.`
+    );
     return;
   }
   if (personalWakeModel && personalWakeModel.mode !== 'off') {
-    if (!wakeFeatures) {
-      recordVoiceEvent('Personal wake verifier had no feature snapshot; preserving baseline wake behavior.');
-    } else {
-      const verificationStartedAt = performance.now();
-      try {
-        const personalScore = scorePersonalWake(personalWakeModel, wakeFeatures);
-        const verificationMs = performance.now() - verificationStartedAt;
-        const effectiveThreshold = Math.max(
-          0.45,
-          personalWakeModel.threshold - personalWakeRuntimeTolerance
-        );
-        recordVoiceEvent(
-          `Personal wake ${personalWakeModel.mode}: score=${personalScore.toFixed(3)}, `
-          + `threshold=${effectiveThreshold.toFixed(3)} `
-          + `(configured=${personalWakeModel.threshold.toFixed(3)}), `
-          + `latency=${verificationMs.toFixed(1)}ms.`
-        );
-        if (personalWakeModel.mode === 'active' && personalScore < effectiveThreshold) {
-          pendingWakeCandidateAt = 0;
-          pendingWakeCandidateScore = 0;
-          recordVoiceEvent('Wake word rejected by the active personal verifier.');
-          return;
-        }
-      } catch (error) {
-        // A corrupt or incompatible optional model must never make Jarvis
-        // impossible to summon. Failing open is the exact baseline behavior.
-        recordVoiceEvent(
-          `Personal wake verifier bypassed: ${error instanceof Error ? error.message : String(error)}`
-        );
+    const verificationStartedAt = performance.now();
+    try {
+      const personalScore = scorePersonalWake(personalWakeModel, wakeFeatures);
+      const verificationMs = performance.now() - verificationStartedAt;
+      const effectiveThreshold = Math.max(
+        0.45,
+        personalWakeModel.threshold - personalWakeRuntimeTolerance
+      );
+      recordVoiceEvent(
+        `Personal wake ${personalWakeModel.mode}: keyword=${keyword}, score=${personalScore.toFixed(3)}, `
+        + `threshold=${effectiveThreshold.toFixed(3)} `
+        + `(configured=${personalWakeModel.threshold.toFixed(3)}), `
+        + `latency=${verificationMs.toFixed(1)}ms.`
+      );
+      if (personalWakeModel.mode === 'active' && personalScore < effectiveThreshold) {
+        pendingWakeCandidateAt = 0;
+        pendingWakeCandidateScore = 0;
+        recordVoiceEvent('Wake word rejected by the active personal verifier.');
+        return;
       }
+    } catch (error) {
+      // A corrupt or incompatible optional model must never make Jarvis
+      // impossible to summon. Failing open is the exact baseline behavior.
+      recordVoiceEvent(
+        `Personal wake verifier bypassed: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
   if (score < immediateWakeScore) {
@@ -2027,7 +2088,7 @@ async function handleWakeDetection(score: number, wakeFeatures: number[] | null)
   pendingPersonalWakeCandidateScore = 0;
   wakeTransition = true;
   try {
-    recordVoiceEvent(`Wake word accepted (score=${score.toFixed(3)}).`);
+    recordVoiceEvent(`Wake word accepted: keyword=${keyword}, score=${score.toFixed(3)}.`);
     await stopWakeWord();
     // Echo cancellation handles the assembly sound. Keeping the microphone
     // closed for the full animation made short commands spoken just after the
@@ -2043,9 +2104,36 @@ async function handleWakeDetection(score: number, wakeFeatures: number[] | null)
   }
 }
 
-wakeEngine.on('detect', ({ score }) => {
-  const wakeFeatures = snapshotWakeFeatures();
-  void handleWakeDetection(score, wakeFeatures);
+function flushLexicalWakeCandidates() {
+  pendingLexicalWakeTimer = null;
+  const candidates = pendingLexicalWakeCandidates;
+  pendingLexicalWakeCandidates = [];
+  const winner = candidates.sort((left, right) => right.score - left.score)[0];
+  if (!winner) return;
+  if (candidates.length > 1) {
+    recordVoiceEvent(
+      `Wake-word arbitration selected ${winner.keyword}=${winner.score.toFixed(3)} from `
+      + candidates.map(({ keyword, score }) => `${keyword}=${score.toFixed(3)}`).join(', ') + '.'
+    );
+  }
+  void handleWakeDetection(winner.score, winner.wakeFeatures, winner.keyword);
+}
+
+wakeEngine.on('detect', ({ keyword, score }) => {
+  // Each word model owns a separate rolling history. Always snapshot the
+  // model that emitted this detection; reading hey_jarvis unconditionally
+  // makes Ashley/Jarvis personal-verifier scores meaningless.
+  pendingLexicalWakeCandidates.push({
+    keyword,
+    score,
+    wakeFeatures: snapshotWakeFeatures(keyword)
+  });
+  if (pendingLexicalWakeTimer === null) {
+    pendingLexicalWakeTimer = window.setTimeout(
+      flushLexicalWakeCandidates,
+      wakeKeywordArbitrationMs
+    );
+  }
 });
 wakeEngine.on('speech-start', () => log('Wake microphone heard speech.'));
 wakeEngine.on('speech-end', () => void handleWakeSpeechEnd());

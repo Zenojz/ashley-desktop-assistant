@@ -1874,7 +1874,32 @@ function createVoiceWindow() {
     doubaoVoiceTransport.close();
     voiceWindow = null;
   });
-  voiceWindow.loadFile(path.join(__dirname, '../renderer/voice.html'));
+  const extraWakeModels = parseExtraWakeModels(process.env.JARVIS_EXTRA_WAKE_MODELS);
+  voiceWindow.loadFile(path.join(__dirname, '../renderer/voice.html'), {
+    query: { extraWakeModels: JSON.stringify(extraWakeModels) }
+  });
+}
+
+type ExtraWakeModel = { keyword: string; modelFile: string };
+
+function parseExtraWakeModels(raw: string | undefined): ExtraWakeModel[] {
+  if (!raw?.trim()) return [];
+  const models: ExtraWakeModel[] = [];
+  const seen = new Set(['hey_jarvis']);
+  for (const item of raw.split(',')) {
+    const separator = item.indexOf(':');
+    const keyword = item.slice(0, separator).trim().toLowerCase();
+    const modelFile = item.slice(separator + 1).trim();
+    const validKeyword = /^[a-z0-9][a-z0-9_-]*$/.test(keyword);
+    const validModelFile = /^[a-z0-9][a-z0-9._-]*\.onnx$/i.test(modelFile);
+    if (separator <= 0 || !validKeyword || !validModelFile || seen.has(keyword)) {
+      log(`Ignoring invalid or duplicate JARVIS_EXTRA_WAKE_MODELS entry: ${item.trim() || '(empty)'}.`);
+      continue;
+    }
+    seen.add(keyword);
+    models.push({ keyword, modelFile });
+  }
+  return models.slice(0, 8);
 }
 
 function toggleJarvisWindow() {

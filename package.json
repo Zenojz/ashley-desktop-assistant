@@ -34,8 +34,8 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Jarvis 需要使用麦克风来识别唤醒词。",
-        "NSAppleEventsUsageDescription": "Jarvis 需要控制 macOS 桌面来执行你明确要求的桌面切换。"
+        "NSMicrophoneUsageDescription": "Ashley 需要使用麦克风来识别唤醒词并进行语音对话。",
+        "NSAppleEventsUsageDescription": "Ashley 需要控制 macOS 桌面来执行你明确要求的桌面切换。"
       }
     }
   },

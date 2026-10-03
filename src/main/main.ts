@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  ClipboardItem,
   globalShortcut,
   ipcMain,
   type IpcMainEvent,
@@ -682,13 +683,18 @@ function openApplicationByBundleId(bundleId: string) {
   });
 }
 
-function snapshotClipboard() {
-  return clipboard.availableFormats().map((format) => ({ format, data: clipboard.readBuffer(format) }));
+async function snapshotClipboard(): Promise<ClipboardItem[]> {
+  const items = await clipboard.read();
+  return Promise.all(items.map(async (item) => {
+    const formats: Record<string, Blob | { title: string; url: string }> = {};
+    for (const format of item.types) formats[format] = await item.getType(format);
+    return new ClipboardItem(formats);
+  }));
 }
 
-function restoreClipboard(snapshot: Array<{ format: string; data: Buffer }>) {
-  clipboard.clear();
-  for (const item of snapshot) clipboard.writeBuffer(item.format, item.data);
+async function restoreClipboard(snapshot: ClipboardItem[]) {
+  if (snapshot.length === 0) clipboard.clear();
+  else await clipboard.write(snapshot);
 }
 
 async function playMusic(
@@ -709,9 +715,9 @@ async function playMusic(
   const query = applicationName === 'kugou' ? song : artist ? `${song} ${artist}` : song;
   await openApplicationByBundleId(details.bundleId);
   if (applicationName === 'kugou') {
-    const clipboardSnapshot = snapshotClipboard();
-    clipboard.writeText(query);
+    const clipboardSnapshot = await snapshotClipboard();
     try {
+      await clipboard.writeText(query);
       const script = [
         'on run',
         '  tell application "System Events"',
@@ -768,7 +774,7 @@ async function playMusic(
       log(`Kugou play failed for ${JSON.stringify(query)}: ${error instanceof Error ? error.message : String(error)}`);
       throw new Error(`酷狗没有切换到《${song}》，所以我没有报告播放成功。`);
     } finally {
-      restoreClipboard(clipboardSnapshot);
+      await restoreClipboard(clipboardSnapshot);
     }
   } else {
     // NetEase Music deliberately exposes only its menu bar to macOS
@@ -776,9 +782,9 @@ async function playMusic(
     // and result-section offsets relative to its current window. The query is
     // pasted through the system clipboard so Chinese song names are reliable;
     // every clipboard format is restored immediately after the script exits.
-    const clipboardSnapshot = snapshotClipboard();
-    clipboard.writeText(query);
+    const clipboardSnapshot = await snapshotClipboard();
     try {
+      await clipboard.writeText(query);
       const script = [
         'on run',
         '  tell application "System Events"',
@@ -802,7 +808,7 @@ async function playMusic(
       ].join('\n');
       await runAppleScript(script, [], 12_000);
     } finally {
-      restoreClipboard(clipboardSnapshot);
+      await restoreClipboard(clipboardSnapshot);
     }
   }
   lastMusicApplication = applicationName;

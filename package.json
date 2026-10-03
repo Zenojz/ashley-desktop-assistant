@@ -1,6 +1,6 @@
 {
   "name": "ashley-desktop-assistant",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "macOS desktop voice assistant with a 3D avatar",
   "author": "Zenojz",
   "packageManager": "pnpm@11.19.0",
@@ -51,11 +51,11 @@
     "@types/node": "^22.15.3",
     "@types/three": "^0.185.4",
     "@types/ws": "^8.18.1",
-    "electron": "^39.2.7",
+    "electron": "44.5.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "meshoptimizer": "1.1.1",
-    "sharp": "0.35.3",
+    "sharp": "0.35.5",
     "typescript": "^5.8.3"
   }
 }

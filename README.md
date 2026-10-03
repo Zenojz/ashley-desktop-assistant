@@ -10,6 +10,23 @@ Ashley is a macOS desktop voice assistant. Its transparent Three.js avatar
 floats above the desktop and supports voice interaction, assembly and fracture
 effects, rotation, gestures, weather lookup, and experimental music control.
 
+## Try Ashley and share feedback
+
+The [preview release](https://github.com/Zenojz/ashley-desktop-assistant/releases)
+contains an Apple Silicon app archive. It is ad-hoc signed and **not Apple
+notarized**, so macOS may prevent a downloaded copy from opening. Building from
+source using the steps below is the supported alternative. The preview needs
+your own voice-provider credentials; no API keys are included.
+
+For the packaged app, create `~/Library/Application Support/Ashley/.env` with
+the provider settings described below before launching it. The app also reads
+the project `.env` when run from source.
+
+If installation, launch, wake-word detection, or voice conversation fails,
+[open a bug report](https://github.com/Zenojz/ashley-desktop-assistant/issues/new/choose).
+Please include your macOS version, Mac chip, install method, and steps to
+reproduce. Do not post API keys, recordings, or personal wake-word models.
+
 ## Wake-word availability and limitations
 
 - **Works out of the box:** only **“Hey Jarvis”**, using the bundled community
@@ -64,14 +81,15 @@ were removed cleanly, not disabled code paths.
 
 - macOS 13 Ventura or newer (Apple silicon is the primary tested target)
 - Node.js 22 or newer
-- pnpm 9 or newer
+- pnpm 11.19.0 (pinned in `package.json`)
 - Xcode Command Line Tools, for the native location helper
 - Optional: `ffmpeg`, only when regenerating the bundled sound effects
 
 ## API credentials
 
-Copy `.env.example` to `.env`, then fill in only the providers you intend to
-use. Never commit `.env`.
+When running from source, copy `.env.example` to `.env`. For the packaged app,
+put the same settings in `~/Library/Application Support/Ashley/.env`. Fill in
+only the providers you intend to use. Never commit `.env`.
 
 - `OPENAI_API_KEY`: OpenAI Realtime voice. Create a key using the
   [OpenAI developer quickstart](https://platform.openai.com/docs/quickstart/make-your-first-api-request).
@@ -86,8 +104,10 @@ use. Never commit `.env`.
 ## Install and run
 
 ```bash
+git clone https://github.com/Zenojz/ashley-desktop-assistant.git
+cd ashley-desktop-assistant
 cp .env.example .env
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -101,15 +121,15 @@ To build without launching Electron:
 pnpm build
 ```
 
-To create an unpacked macOS application:
+To create an Apple Silicon application and ZIP archive:
 
 ```bash
-pnpm package:mac
+pnpm package:mac:zip
 ```
 
-`scripts/sign-macos.sh` uses ad-hoc signing by default. Set
-`JARVIS_CODESIGN_IDENTITY` to your own certificate name for a distributable
-signed build.
+The archive is written to `release/Ashley-mac-arm64.zip`. This build is ad-hoc
+signed and not notarized. A public distribution build requires a Developer ID
+signature and Apple notarization.
 
 ## Ashley wake word
 

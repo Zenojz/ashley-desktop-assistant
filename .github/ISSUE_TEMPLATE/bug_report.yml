@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a problem when trying Ashley
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Ashley. Please do not post API keys, voice recordings, or personal wake-word models. Remove private information from logs before attaching them.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0-preview or commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Ashley?
+      options:
+        - GitHub Release app
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS version and Mac chip
+      placeholder: macOS 15, Apple M2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: What did you do, and what happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Optional. Remove secrets and personal information first.

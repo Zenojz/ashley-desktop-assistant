@@ -22,10 +22,19 @@ For the packaged app, create `~/Library/Application Support/Ashley/.env` with
 the provider settings described below before launching it. The app also reads
 the project `.env` when run from source.
 
-If installation, launch, wake-word detection, or voice conversation fails,
-[open a bug report](https://github.com/Zenojz/ashley-desktop-assistant/issues/new/choose).
-Please include your macOS version, Mac chip, install method, and steps to
-reproduce. Do not post API keys, recordings, or personal wake-word models.
+If you try the preview, please [share a test report](https://github.com/Zenojz/ashley-desktop-assistant/issues/new?template=preview_test_report.yml)
+whether it works or fails. Start with the Release ZIP if possible, then report
+your macOS version, Mac chip, whether Ashley opened, and which of these you
+actually tried: microphone input, voice conversation, the bundled “Hey Jarvis”
+wake phrase, and music search with clipboard restoration. Mark untried features
+as **Not tested**. Reports from source builds are welcome, but identify them as
+such so they are not mistaken for tests of the downloadable app. For a bug that
+needs reproduction steps, [open a bug report](https://github.com/Zenojz/ashley-desktop-assistant/issues/new?template=bug_report.yml).
+Do not post API keys, `.env` files, recordings, or personal wake-word models.
+
+The Release ZIP has been checked by the build pipeline, but installation and
+interactive behavior on another Mac still need user reports. Downloads alone
+do not establish that the app works.
 
 ## Wake-word availability and limitations
 

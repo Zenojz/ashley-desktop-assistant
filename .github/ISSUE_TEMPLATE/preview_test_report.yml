@@ -1,0 +1,97 @@
+name: Preview test report
+description: Share what worked or failed when trying an Ashley preview
+title: "[Preview test] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Both successful and unsuccessful tests are useful. Please report only what you actually tried. Do not post API keys, .env files, voice recordings, personal wake-word models, or private information from logs and screenshots.
+  - type: input
+    id: version
+    attributes:
+      label: Release version or commit
+      placeholder: v0.1.1-preview or commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Ashley?
+      options:
+        - GitHub Release ZIP
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS version and Mac chip
+      placeholder: macOS 15.7, Apple M2
+    validations:
+      required: true
+  - type: dropdown
+    id: launch
+    attributes:
+      label: First launch
+      options:
+        - Opened successfully
+        - Opened after a macOS security override
+        - Blocked by macOS
+        - Crashed or did not open
+        - Not tested
+    validations:
+      required: true
+  - type: dropdown
+    id: microphone
+    attributes:
+      label: Microphone permission and input
+      options:
+        - Worked
+        - Failed
+        - Not tested
+    validations:
+      required: true
+  - type: dropdown
+    id: voice
+    attributes:
+      label: Voice conversation (with your own provider credentials)
+      options:
+        - Worked
+        - Failed
+        - Not tested
+    validations:
+      required: true
+  - type: dropdown
+    id: wake
+    attributes:
+      label: Bundled "Hey Jarvis" wake phrase
+      options:
+        - Worked
+        - Failed
+        - Not tested
+    validations:
+      required: true
+  - type: dropdown
+    id: music
+    attributes:
+      label: Music search and clipboard restoration
+      options:
+        - Both worked
+        - Search worked, clipboard did not restore
+        - Search failed
+        - Not tested
+    validations:
+      required: true
+  - type: textarea
+    id: observations
+    attributes:
+      label: What did you try and observe?
+      description: For a failure, include the steps and the exact point where it stopped. For a success, describe the features you actually used.
+      placeholder: I downloaded the ZIP, moved Ashley to Applications, launched it on macOS ..., then ...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Error text, sanitized logs, or screenshots
+      description: Optional. Remove secrets and personal information before posting.
